@@ -4,7 +4,7 @@ import { POT_INDEX_SETTINGS } from '@/lib/pot-index/registry'
 import { PageHeader } from '@/components/PageHeader'
 
 export const metadata: Metadata = {
-  title: 'Mainnet | PotBot POTfolio',
+  title: 'Mainnet plan',
   description: 'What changes when PotBot POTfolio goes live on Solana mainnet: real assets, any token with a price feed, Jupiter keepers, guarded launch with caps and a multisig.',
 }
 

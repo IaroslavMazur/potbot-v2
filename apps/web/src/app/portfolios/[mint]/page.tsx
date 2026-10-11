@@ -76,7 +76,7 @@ export default function PotPage() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    if (pot.data) document.title = `${pot.data.name} ($${pot.data.symbol}) — PotBot`
+    if (pot.data) document.title = `${pot.data.name} ($${pot.data.symbol}) · PotBot`
   }, [pot.data])
 
   const amountNum = Number(amount) || 0

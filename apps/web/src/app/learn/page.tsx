@@ -6,7 +6,7 @@ import { STAGES } from '@/lib/pot-index/garden'
 import { PageHeader } from '@/components/PageHeader'
 
 export const metadata: Metadata = {
-  title: 'Learn: what is a POTfolio? | PotBot',
+  title: 'Learn: what is a POTfolio?',
   description:
     'POTfolios, Vaults and the Bot, explained in plain words: how the index token is minted and burned, who can and cannot touch the assets, fees, keepers and Garden mode.',
 }

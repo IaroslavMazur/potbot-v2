@@ -37,7 +37,7 @@ export default function PortfoliosPage() {
   }, [pots.data, cat, sort, stats.data])
 
   useEffect(() => {
-    document.title = 'POTfolios — PotBot'
+    document.title = 'POTfolios · PotBot'
   }, [])
 
   return (

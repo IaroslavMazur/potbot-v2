@@ -43,7 +43,7 @@ export default function NewPotPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    document.title = 'Create a POTfolio — PotBot'
+    document.title = 'Create a POTfolio · PotBot'
   }, [])
 
   const total = rows.reduce((s, r) => s + r.weight, 0)

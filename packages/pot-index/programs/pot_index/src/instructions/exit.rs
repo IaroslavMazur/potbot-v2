@@ -90,14 +90,15 @@ pub fn handle_exit<'info>(
         let mint_info = &ctx.remaining_accounts[i * 3 + 2];
         require_keys_eq!(vault_info.key(), leg.vault, PotError::VaultMismatch);
         let vault = Account::<TokenAccount>::try_from(vault_info)?;
+        let out = oracle::exit_amount(vault.amount, shares, supply)?;
+        if out == 0 {
+            // Nothing to pay for this leg (cash not deployed yet): the holder's ATA may not exist,
+            // and exit must never fail for an avoidable reason. (Review F7.)
+            continue;
+        }
         let user_ata = Account::<TokenAccount>::try_from(user_info)?;
         require_keys_eq!(user_ata.mint, leg.mint, PotError::TokenMintMismatch);
         require_keys_eq!(user_ata.owner, user_key, PotError::TokenOwnerMismatch);
-
-        let out = oracle::exit_amount(vault.amount, shares, supply)?;
-        if out == 0 {
-            continue;
-        }
         require_keys_eq!(mint_info.key(), leg.mint, PotError::TokenMintMismatch);
         token::transfer_checked(
             CpiContext::new_with_signer(

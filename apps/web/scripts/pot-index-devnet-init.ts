@@ -86,7 +86,7 @@ async function main() {
   const cfg = await (program.account as any).config.fetchNullable(configPda())
   if (!cfg) {
     await program.methods
-      .initConfig(admin.publicKey, new (await import('@coral-xyz/anchor')).BN(300))
+      .initConfig(admin.publicKey, new (await import('@coral-xyz/anchor')).BN(30))
       .accounts({ admin: admin.publicKey, config: configPda(), usdcMint: usdc, systemProgram: SystemProgram.programId })
       .rpc()
     console.log('config initialized')

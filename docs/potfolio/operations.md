@@ -21,7 +21,18 @@ Scripts need `NODE_OPTIONS=--require=./scripts/_no-jito.cjs` (stubs `jito-ts`) a
 4. Copy `target/idl/pot_index.json` to `apps/web/src/lib/pot-index/idl.json`, update `client.ts` builders, run `npx tsc --noEmit`, deploy the web app.
 5. Verify on Explorer, run `pot-index:flow status`, one deposit, one exit.
 
+6. Admin config after an upgrade if needed: `npx tsx scripts/pot-index-set-config.ts show | price-age 30`. Metadata: `npm run pot-index:metadata update` repoints every showcase Pot's URI to `potbot.fun`.
+
 Deployer balance and keys stay out of git. Mainnet: see `apps/web/src/app/mainnet` and `docs/operations/deploy.md`.
+
+## Mainnet deploy checklist (from the Oct 11 review)
+- Deploy and `init_config` in **one transaction** (F4): the first caller becomes admin.
+- `max_price_age_secs = 30` at init (cap 60 in code).
+- Verified build published on Explorer before the first deposit.
+- Upgrade authority, protocol admin and `register_asset` on a Squads 2-of-3 with a timelock (F2, F3) before the first deposit.
+- Publish the allowlist with mint ↔ Pyth feed pairs so anyone can verify registrations.
+- Only allowlist mints without a freeze authority, or document the exposure per asset (F8).
+- Token metadata JSON and images on the production domain or Arweave; Token-2022 metadata at the migration (F14).
 
 ## Known devnet limits
 Free Pyth tier: SOL, BTC, ETH, BNB, XRP, DOGE, JitoSOL, PYTH, USDC, TSLA, QQQ only. Equity feeds stop on weekends: deposits into stock Pots fail with `StalePrice` until market open; exits work. Public devnet RPC rate-limits: activity fetch is chunked and refetched every 45 to 90 s.

@@ -4,7 +4,7 @@
 
 ### Any basket of Solana assets. One liquid token.
 
-**Create a portfolio, hold the token.** Deposit USDC, receive a token that mirrors the whole basket, hold it anywhere a token works, redeem it any time for every asset inside or for USDC. Nobody can withdraw the assets: not the creator, not PotBot.
+**Create a portfolio, hold the token.** Deposit USDC, receive a token that mirrors the whole basket, hold it anywhere a token works, redeem it any time for every asset inside or for USDC. Nobody can withdraw the assets: not the creator, not PotBot, not without a program upgrade or a malicious asset registration, both of which will sit behind a multisig.
 
 [potbot.fun](https://potbot.fun) · [Live POTfolios](https://potbot.fun/portfolios) · [How it works](https://potbot.fun/learn) · [For the judges](https://potbot.fun/worldsfair) · [@PotBot_sol](https://x.com/PotBot_sol)
 
@@ -32,9 +32,9 @@ nobody:   withdraw. There is no such instruction.
 
 | Promise | How the program keeps it |
 |---|---|
-| No rug | Assets sit in Pot-owned PDAs. No withdraw instruction. Creator can only pause deposits or cap size. |
+| No rug | Assets sit in Pot-owned PDAs. No withdraw instruction. Creator can only pause deposits or cap size. The two remaining trust points, program upgrades and asset registration, go behind a Squads multisig with a timelock before mainnet. |
 | No exit liquidity games | Exit burns tokens for a pro-rata share of every vault, needs no oracle, no keeper, cannot be paused. 0.50% stays with remaining holders. |
-| Honest price | Mint at NAV from Pyth pull updates posted in the same transaction; max 5 min old, confidence ≤ 2%, priced at price ± conf against the Pot. |
+| Honest price | Mint at NAV from Pyth pull updates posted in the same transaction; max 30 s old (cap 60 s in code), confidence ≤ 2%, priced at price ± conf against the Pot. |
 | Bounded keepers | `rebalance_open` / `rebalance_close` in one transaction (Instructions-sysvar introspection): toward target only, never past it, ≤ 25% of NAV per trade, ≥ Pyth value × (1 − slippage) or everything reverts. |
 | Creators earn | 0.30% entry fee split in the deposit tx: 40% creator, 40% referrer, 20% protocol. No custody, no liability. |
 
@@ -88,7 +88,7 @@ Hackathon work (Sept 14 to Oct 12, 2026) lives in `packages/pot-index`, `apps/we
 | `exit(shares, min_usdc_out)` | holder | Burn, receive every leg pro-rata in kind. Never pausable, no oracle. |
 | `exit_usdc_open` / `exit_usdc_close` | holder | Same, then sell the legs in the same tx (Jupiter on mainnet); `close` enforces the on-chain minimum and takes the 0.10% conversion fee. |
 | `rebalance_open` / `rebalance_close` | any keeper | Bounded flash trade, see table above. Cash deployment has no cooldown so a deposit can be allocated leg by leg in one prompt. |
-| `set_pot_params` | creator | Pause deposits, cap size. Nothing else. |
+| `set_pot_params`, `update_index_metadata` | creator | Pause deposits, cap size, repoint the token's metadata URI. Nothing else. |
 | `init_config`, `set_config`, `transfer_admin` / `accept_admin`, `register_asset`, `set_asset_enabled` | admin | Protocol settings, two-step admin, asset allowlist (mint + Pyth feed). |
 
 Full reference, limits and all error codes: [`docs/potfolio/program.md`](docs/potfolio/program.md).
@@ -98,7 +98,7 @@ Full reference, limits and all error codes: [`docs/potfolio/program.md`](docs/po
 ```bash
 # program (Anchor 1.2.1, Solana CLI 4.3, Rust 1.89)
 cd packages/pot-index
-./test.sh            # SBPF v0 build + LiteSVM suite: full flow, bounded rebalance, exit to USDC, referral paths, stale oracle, admin
+./test.sh            # SBPF v0 build + LiteSVM suite (12): full flow, bounded rebalance, exit to USDC, referral paths, oracle window, account substitution, admin
 anchor build         # deployable artifact + IDL
 
 # web
@@ -116,7 +116,7 @@ Tests cover: fee split with and without referrer, self-referral rejection, missi
 
 ## Security
 
-Reviewed against the Solana Foundation program-security checklist (Oct 8, and Oct 10 by an independent reviewer agent after exit-to-USDC): no criticals or highs; the two mediums (oracle tick shopping, keeper margin on cash deploys) are fixed, see [docs/potfolio/security.md](docs/potfolio/security.md). Oracle age cap and conservative confidence pricing, rebalance deadband and cooldown, two-step admin, exit safety valve against a stale rebalance flag, `init_if_needed` ATAs, 1 USDC minimum deposit. Known and accepted for the devnet build: a depositor can self-refer from a second wallet (registered referrers later); keeper slippage up to 1% is the implicit rebalance cost. Third-party audit, Squads multisig for upgrade authority and a capped flagship are on the [mainnet path](https://potbot.fun/mainnet). Report issues per [SECURITY.md](SECURITY.md).
+Three reviews: Oct 8 and Oct 10 against the Solana Foundation program-security checklist (the second by a reviewer agent that had not seen the code being written), and Oct 11 an independent human review by a Solana engineer. No fund-draining path from an unprivileged account, no criticals or highs. The Oct 11 review found that the Oct 10 oracle fix was not a fix (a pull oracle accepts old ticks posted now): the window is now 30 s with a 60 s cap in code, with a test. Every finding, what changed and what is accepted is in [docs/potfolio/security.md](docs/potfolio/security.md). Oracle age cap and conservative confidence pricing, rebalance deadband and cooldown, two-step admin, exit safety valve against a stale rebalance flag, `init_if_needed` ATAs, 1 USDC minimum deposit. Known and accepted for the devnet build: a depositor can self-refer from a second wallet (registered referrers later); keeper slippage up to 1% is the implicit rebalance cost. Third-party audit, Squads multisig for upgrade authority and a capped flagship are on the [mainnet path](https://potbot.fun/mainnet). Report issues per [SECURITY.md](SECURITY.md).
 
 ## What is next
 

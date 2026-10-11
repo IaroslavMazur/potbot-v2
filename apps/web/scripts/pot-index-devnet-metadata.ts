@@ -4,10 +4,12 @@
  *   - index mints: via the program's `set_index_metadata` (Pot PDA is mint authority) — creator signs
  *   - test mints (tUSDC/tSOL/tBTC/tETH): direct CreateMetadataAccountV3 — admin is mint authority
  *
- *   npm run pot-index:metadata            # flagship + test mints
- *   npm run pot-index:metadata <indexMint> # one Pot
+ *   npm run pot-index:metadata                   # flagship + test mints (create if missing)
+ *   npm run pot-index:metadata <indexMint>       # one Pot (create if missing)
+ *   npm run pot-index:metadata update [mint]     # repoint every showcase Pot (or one) to $POT_INDEX_META_BASE
+ *                                                # through the program's creator-only `update_index_metadata`
  *
- * Metadata JSON + logo are served from the web app at /token-meta/*.json (set $POT_INDEX_META_BASE).
+ * Metadata JSON + logo are served from the production domain at /token-meta/*.json (set $POT_INDEX_META_BASE).
  */
 import fs from 'node:fs'
 import os from 'node:os'
@@ -20,7 +22,7 @@ import { fetchPot, potPda } from '../src/lib/pot-index/client'
 
 const RPC = process.env.POT_INDEX_RPC ?? 'https://api.devnet.solana.com'
 const KEYPAIR = process.env.POT_INDEX_ADMIN_KEYPAIR ?? path.join(os.homedir(), '.config/solana/id.json')
-const BASE = process.env.POT_INDEX_META_BASE ?? 'https://potbot-v2-git-feat-pot-index-y-dao.vercel.app/token-meta'
+const BASE = process.env.POT_INDEX_META_BASE ?? 'https://potbot.fun/token-meta'
 const TOKEN_METADATA = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s')
 
 function metadataPda(mint: PublicKey) {
@@ -67,6 +69,22 @@ async function main() {
   const connection = new Connection(RPC, 'confirmed')
   const program = new Program(idl as Idl, new AnchorProvider(connection, new Wallet(admin), { commitment: 'confirmed' }))
   const only = process.argv[2]
+
+  if (only === 'update') {
+    const targets = process.argv[3] ? [process.argv[3]] : Object.values(registry.pots ?? {}).map((p) => (typeof p === 'string' ? p : (p as { mint: string }).mint))
+    for (const m of targets) {
+      const mint = new PublicKey(m)
+      const pot = await fetchPot(connection, mint)
+      if (!pot) throw new Error(`pot ${m} not found`)
+      const uri = `${BASE}/${pot.symbol.toLowerCase()}.json`
+      const sig = await program.methods
+        .updateIndexMetadata(uri)
+        .accounts({ creator: admin.publicKey, pot: potPda(mint), metadata: metadataPda(mint), tokenMetadataProgram: TOKEN_METADATA })
+        .rpc()
+      console.log('updated', pot.symbol, uri, sig)
+    }
+    return
+  }
 
   const pots = only ? [only] : [registry.flagship!]
   for (const m of pots) {

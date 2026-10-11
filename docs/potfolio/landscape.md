@@ -1,5 +1,21 @@
 # Where POTfolio sits
 
+## The idea on crypto Twitter: Creator ETFs
+
+On Dec 20, 2025 mert (Helius) wrote: "your fav CT person creates index fund of tokens, mints ETF shares → you buy if you think they're a good decision maker → finally know if a person is a sound investor or a LARP" (https://x.com/mert/status/2002394652993851679). The same day Akshay BD, ~170K impressions: "the real opportunity in creator coins is for them to be user generated ETFs: individuals who research, share a thesis and build a basket of assets against that and earn a fee on the AUM." The PotBot founder replied in that thread.
+
+The objections in the replies, and what POTfolio does about them:
+
+| Objection | POTfolio |
+|---|---|
+| Most CT creators are bad traders; 99% go to zero | The creator publishes a basket, not trades. Fixed weights; performance since launch is public from day one. |
+| Counterparty risk: custody, bridging, infra | No custody: program-owned accounts, no withdraw instruction, exit in kind that cannot be paused. |
+| It is copy-trading again | Copy-portfolio, not copy-trade: one token that mirrors a basket, no trade stream. |
+| Symmetry, Reserve, Alvara, Indexify already exist | See the table below: none combine a plain SPL token in any wallet, an unpausable exit, keepers bounded by code, no-code creation and a fee split inside the deposit. |
+| Who rebalances after a shock? | Permissionless keepers, bounded on-chain. |
+| Legal liability of managing other people's money | The creator cannot touch the money. He is an author of a recipe, paid from inflows, not a manager. |
+
+
 Baskets on Solana are not new. What is new in POTfolio is the combination: a basket that is a plain SPL token anyone can hold, an exit nobody can pause, keepers bounded by the program instead of by trust, and creation without code so communities and creators can launch their own.
 
 | | What | Holdable token | Exit | Rebalancing | Creating | Creators earn |

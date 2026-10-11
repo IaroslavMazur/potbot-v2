@@ -31,3 +31,6 @@ A POTfolio is any basket of Solana assets, held as one token: deposit USDC to ge
 - **Leg**: one asset in the basket with its target weight.
 - **Keeper**: any bot that submits a bounded rebalance.
 - **Index token**: the SPL token that represents a share of the Pot.
+
+## How we got here (the pivot, for the record)
+The original spec for this hackathon was a SOL yield aggregator: yield sources, a reserve buffer, a rebalancer role, a withdrawal fee to the treasury. Two weeks in, it was replaced by what shipped: a USDC-in, multi-asset, fixed-weight index with in-kind exit and a liquid token. The reason: a yield aggregator asks holders to trust a strategy and a rebalancer; an index with fixed weights and an unpausable exit asks them to trust only the program, and the token it issues is useful on its own (held, sent, traded, later used as collateral). It is also the product that the previous two versions of PotBot (group trading in Telegram, governed vaults) were circling: a creator or a group at the centre, Jupiter for execution, fees that pay whoever brings capital, and no custody.

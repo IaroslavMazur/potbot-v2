@@ -287,6 +287,19 @@ export async function buildSetIndexMetadata(program: Program, creator: PublicKey
     .instruction()
 }
 
+/** Creator-only: repoint the index token's metadata URI (logo, description, thesis). */
+export async function buildUpdateIndexMetadata(program: Program, creator: PublicKey, indexMint: PublicKey, uri: string) {
+  return program.methods
+    .updateIndexMetadata(uri)
+    .accounts({
+      creator,
+      pot: potPda(indexMint),
+      metadata: metadataPda(indexMint),
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+    })
+    .instruction()
+}
+
 export interface DepositArgs {
   pot: PotView
   user: PublicKey

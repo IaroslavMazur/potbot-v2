@@ -71,7 +71,7 @@ export default function NewPotPage() {
         symbol: symbol.trim().toUpperCase(),
         legs: rows.map((r) => ({ mint: new PublicKey(r.mint), weightBps: r.weight * 100 })),
         depositCapUsd: 0,
-        slippageBps: 100,
+        slippageBps: 50,
         maxTradeBps: 1000,
         onGrind: setGrind,
       })

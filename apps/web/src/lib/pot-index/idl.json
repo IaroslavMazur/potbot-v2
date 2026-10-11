@@ -1345,6 +1345,68 @@
           }
         }
       ]
+    },
+    {
+      "name": "update_index_metadata",
+      "docs": [
+        "Creator-only: repoint the index token's metadata URI (logo, description, thesis)."
+      ],
+      "discriminator": [
+        150,
+        199,
+        25,
+        237,
+        8,
+        76,
+        217,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "pot"
+          ]
+        },
+        {
+          "name": "pot",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pot.index_mint",
+                "account": "Pot"
+              }
+            ]
+          }
+        },
+        {
+          "name": "metadata",
+          "docs": [
+            "checks that `pot` is the update authority recorded in it."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_metadata_program",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        }
+      ],
+      "args": [
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
     }
   ],
   "accounts": [

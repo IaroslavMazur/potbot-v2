@@ -280,7 +280,8 @@ export function usePotIndexActions() {
       if (!program || !pubkey) throw new Error('Connect a wallet first')
       const { indexMint, instructions } = await buildCreatePot(program, pubkey, new PublicKey(POT_INDEX_SETTINGS.usdcMint), args, { onGrind: args.onGrind })
       // create + legs + finalize: keep legs ≤ 3 in one tx, otherwise split finalize off.
-      const metaUri = `${window.location.origin}/api/pot-index/meta/${indexMint.publicKey.toBase58()}`
+      // Canonical origin, never the deployment the creator happened to use (preview URLs are garbage-collected).
+      const metaUri = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://potbot.fun'}/api/pot-index/meta/${indexMint.publicKey.toBase58()}`
       const metadata = await buildSetIndexMetadata(program, pubkey, indexMint.publicKey, metaUri)
       const sigs: string[] = []
       if (args.legs.length <= 3) {

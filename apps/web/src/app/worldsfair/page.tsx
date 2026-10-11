@@ -45,6 +45,25 @@ export default function WorldsFairPage() {
         <p className="text-xs">Everything above is a real devnet transaction on program <code className="break-all">{PROGRAM}</code>. Test tokens, live Pyth prices.</p>
       </Section>
 
+      <Section title="Creator ETFs, as crypto Twitter asked for">
+        <p>
+          On Dec 20, 2025 mert (Helius) wrote: <i>&ldquo;your fav CT person creates index fund of tokens, mints ETF shares, you buy if you
+          think they&apos;re a good decision maker, finally know if a person is a sound investor or a LARP.&rdquo;</i> The same day Akshay BD
+          (170K impressions): <i>&ldquo;the real opportunity in creator coins is for them to be user generated ETFs: individuals who research,
+          share a thesis and build a basket of assets against that and earn a fee on the AUM.&rdquo;</i> The PotBot founder replied in that
+          thread. mert asked whether anyone had traction.
+        </p>
+        <p>
+          POTfolio is that product, with one change that answers the objections in those threads: the creator publishes the basket and
+          earns on every deposit, but cannot touch the money. No custody, no discretion, no manager liability. Five baskets live on
+          devnet, every deposit and exit on Explorer: that is the traction.
+        </p>
+        <p className="text-xs">
+          Sources: <a className="text-pot-green underline" href="https://x.com/mert/status/2002394652993851679" target="_blank" rel="noreferrer">mert, Dec 20 2025</a>. The
+          full research, objections and answers: <a className="text-pot-green underline" href="https://github.com/YD811/potbot-v2/blob/main/docs/potfolio/landscape.md" target="_blank" rel="noreferrer">docs/potfolio/landscape.md</a>.
+        </p>
+      </Section>
+
       <Section title="Three hackathons, one idea">
         <ol className="space-y-3">
           <li>
@@ -128,12 +147,12 @@ export default function WorldsFairPage() {
       <Section title="Built during the Fair (Sept 14 to Oct 12)">
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <b>New Anchor 1.2 program <code>pot_index</code></b>, 16 instructions, written from scratch in its own workspace. Devnet
-            program id <code className="break-all text-pot-green">{PROGRAM}</code>, live since Oct 8, upgraded Oct 10 after review.
+            <b>New Anchor 1.2 program <code>pot_index</code></b>, 17 instructions, written from scratch in its own workspace. Devnet
+            program id <code className="break-all text-pot-green">{PROGRAM}</code>, live since Oct 8, upgraded Oct 10 and Oct 12 after reviews.
           </li>
           <li>
             <b>Single-ledger accounting:</b> the SPL index token supply is the only record of ownership. Mint on deposit at Pyth-priced
-            NAV (prices posted in the same transaction, max 5 min old, priced conservatively at price ± confidence), burn on exit.
+            NAV (prices posted in the same transaction, max 30 s old with a 60 s cap in code, priced conservatively at price ± confidence), burn on exit.
             Metaplex token metadata attached by the program, so the token has a name and logo in every wallet.
           </li>
           <li>
@@ -155,11 +174,14 @@ export default function WorldsFairPage() {
             test USDC and SOL; index price history, cost basis and P&amp;L per wallet; Garden mode (every Pot grows a plant with its NAV).
           </li>
           <li>
-            <b>Tests &amp; review:</b> LiteSVM end-to-end suite (fee split and referral paths, bounded rebalance incl. missing-close /
-            overshoot / under-delivery reverts, exit to USDC incl. holder minimum and double close, cash deploy without cooldown, stale
-            oracle, two-step admin). Security review against the Solana Foundation checklist on Oct 8 and an independent reviewer
-            pass on Oct 10: no criticals or highs, both mediums fixed before the devnet upgrade.{' '}
-            <a className="text-pot-green underline" href="https://github.com/YD811/potbot-v2/blob/main/docs/potfolio/security.md" target="_blank" rel="noreferrer">Report</a>
+            <b>Tests &amp; three reviews:</b> LiteSVM end-to-end suite, 12 tests (fee split and referral paths, bounded rebalance incl.
+            missing-close / overshoot / under-delivery reverts, exit to USDC incl. holder minimum and double close, cash deploy without
+            cooldown, oracle window and tick shopping, account substitution, gated instructions). Reviews on Oct 8 and Oct 10 against the
+            Solana Foundation checklist, and on Oct 11 an independent human review by a Solana engineer: no fund-draining path, no
+            criticals or highs. The Oct 11 review showed our Oct 10 oracle fix was not one (a pull oracle accepts old ticks posted now);
+            we shrank the window to 30 s with a 60 s cap in code, added the test, and published every finding, including the two trust
+            points (program upgrades, asset registration) that go behind a multisig before mainnet.{' '}
+            <a className="text-pot-green underline" href="https://github.com/YD811/potbot-v2/blob/main/docs/potfolio/security.md" target="_blank" rel="noreferrer">Full report</a>
           </li>
         </ul>
       </Section>
@@ -169,6 +191,7 @@ export default function WorldsFairPage() {
           <li>Up to 5 assets per Pot today, 10 next (deposit transactions split across price updates).</li>
           <li>Devnet sells and buys go through a test market maker; on mainnet the same two instructions wrap Jupiter swaps signed by the holder alone.</li>
           <li>Fixed weights now. Next: Managed POTfolios (creator adjusts within a public mandate and a timelock) and Community POTfolios (holders vote with the token).</li>
+          <li>Keeper economics, program v2: cash deploy in the same transaction as the deposit (v1 transactions), asset rotations as a Dutch auction so keepers compete the slippage band down, per-Pot deadband. The current band is a floor a third-party keeper can take in full; we say so in the docs instead of pretending otherwise.</li>
           <li>Secondary market: a $POT/USDC pool on Meteora so tokens trade on Jupiter, Photon and in wallets; minting and burning at NAV keep the pool honest.</li>
           <li>Long-tail assets via paid Pyth or Switchboard; permissioned stocks via MPL-3643; &ldquo;Launch with a floor&rdquo;, bonding-curve launches backed by a Pot.</li>
           <li>Guarded mainnet after the Fair: flagship Pot with a cap, upgrade authority on a Squads multisig, Jupiter keeper.</li>

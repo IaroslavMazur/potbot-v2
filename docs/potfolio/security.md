@@ -27,14 +27,14 @@ Not changed on purpose: the monotonic-per-Pot publish time (needs a Pot field, v
 
 The operator is the server-side key behind `/api/pot-index/tx/{prepare,submit}` (devnet: also the market maker and the test-USDC mint authority). These findings are about that off-chain flow; the program's own checks are unaffected.
 
-### O1 (High): `prepare` pays rent that any caller can take back
+### O1 (High): `prepare` pays rent that any caller can take back (fix 1 in #97)
 
 **Flow today.** (1) The browser calls `POST /tx/prepare` with `{kind, wallet, mint, ...}`; there is no authentication and no rate limit. (2) The operator builds the holder's instructions; every "create token account" among them (the holder's USDC and leg accounts for an exit, the index-token account and any `referrer`'s USDC account for a deposit) is moved by `hoistAtaCreations` into separate transactions **paid by the operator**, about 0.00204 SOL of rent each. For deposits and exits to USDC it also posts fresh Pyth prices at its own expense. (3) The holder signs; `POST /tx/submit` verifies the ticket, refreshes prices again, co-signs where needed, sends, and after a deposit deploys the cash as keeper in more operator transactions.
 
 **The drain.** An exit's `prepare` needs only a public Pot address and `shares > 0`: no prices, no balance check. A script loops: new keypair, `prepare` an exit on a 5-leg Pot, close the six empty token accounts the operator just paid for (the owner chooses where the rent goes), repeat. Each loop moves about 0.012 SOL from the operator to the attacker for one transaction fee; deposit `prepare` calls add price posts and an arbitrary `referrer` account on top. Nothing bounds it, so the operator wallet empties, and with it every sponsored action: price refreshes, co-signing, cash deploys. Holders' funds are not at risk (hence High, not Critical), but on mainnet this is a direct, profitable, unbounded loss of protocol SOL plus an outage.
 
 **Fixes, in order of value.**
-1. **The holder pays its own rent.** Keep the idempotent account creations inside the holder's transaction with the holder as payer instead of hoisting them; closing them then only returns the holder's own SOL. This removes the profit.
+1. **The holder pays its own rent.** Keep the idempotent account creations inside the holder's transaction with the holder as payer instead of hoisting them; closing them then only returns the holder's own SOL. This removes the profit. *Implemented in #97*: inside the holder's transaction when it fits, otherwise in a setup transaction signed in the same prompt.
 2. **No per-request spending.** Refresh the operator's price accounts on a schedule (keepers.md already plans every ~20 s) instead of in `prepare`, so a request costs the operator nothing until a signed transaction actually lands.
 3. **Cheap preconditions.** Refuse an exit `prepare` when the wallet holds no index tokens, a deposit when it lacks the USDC, and ignore `referrer` unless it already has a USDC account.
 4. **Rate limits and a budget.** Per-IP and per-wallet limits on both routes, plus a circuit breaker that pauses sponsored actions when the operator's balance falls faster than a set rate.

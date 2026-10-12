@@ -22,7 +22,7 @@ pub use errors::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr");
+declare_id!("7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV");
 
 #[program]
 pub mod pot_index {

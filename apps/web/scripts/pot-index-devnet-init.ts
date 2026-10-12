@@ -69,6 +69,8 @@ async function main() {
   console.log('admin', admin.publicKey.toBase58(), 'program', program.programId.toBase58())
 
   const existing = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : null
+  // A registry written for another program address (a fresh deployment): keep its mints, not its Pots.
+  const freshProgram = Boolean(existing) && existing.programId !== program.programId.toBase58()
 
   // 1. Mints (reuse if the file already has them).
   const mk = async (sym: string, decimals: number) => {
@@ -152,8 +154,8 @@ async function main() {
   }
 
   // 5. Showcase Pots (idempotent by symbol; the first one is the flagship).
-  const pots: Record<string, string> = { ...(existing?.pots ?? {}) }
-  if (existing?.flagship && !existing?.assets?.JUP && !pots.SBC) pots.SBC = existing.flagship
+  const pots: Record<string, string> = freshProgram ? {} : { ...(existing?.pots ?? {}) }
+  if (!freshProgram && existing?.flagship && !existing?.assets?.JUP && !pots.SBC) pots.SBC = existing.flagship
   // Recreate any showcase Pot whose mint does not carry the POT… vanity prefix (retire the old one).
   for (const [sym, m] of Object.entries(pots)) {
     if (m.startsWith(INDEX_MINT_PREFIX)) continue

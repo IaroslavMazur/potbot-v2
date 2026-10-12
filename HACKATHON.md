@@ -6,7 +6,7 @@ Colosseum Crypto World's Fair, Sept 14 to Oct 12, 2026. Entry: **PotBot POTFolio
 
 | | |
 |---|---|
-| Program | `pot_index`, Anchor 1.2, written from scratch during the Fair. 17 instructions. Devnet `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr`, live since Oct 8, upgraded Oct 10 and Oct 12 after reviews ([Explorer](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)) |
+| Program | `pot_index`, Anchor 1.2, written from scratch during the Fair. 18 instructions. Devnet `7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV` (v1.2, Oct 13, after an independent review; [Explorer](https://explorer.solana.com/address/7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV?cluster=devnet)). v1.1, live since Oct 8, stays at `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` |
 | Tests | 12 LiteSVM end-to-end tests, green in CI on every push |
 | Reviews | 3 security reviews (Oct 8, Oct 10 checklist-based; Oct 11 independent human review by a Solana engineer). No fund-draining path, no critical or high findings. [Report](docs/potfolio/security.md) |
 | Live | 5 showcase POTFolios with real Pyth prices, faucet, keeper, price operator, index price history and P&L per wallet |

@@ -9,7 +9,7 @@ Pick up to 5 assets and weights. Holders deposit USDC and get a token that mirro
 [potbot.fun](https://potbot.fun) · [Live POTFolios](https://potbot.fun/portfolios) · [How it works](https://potbot.fun/learn) · [Roadmap](https://potbot.fun/roadmap) · [Docs](docs/potfolio)
 
 [![CI](https://github.com/YD811/potbot-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/YD811/potbot-v2/actions/workflows/ci.yml)
-[![Solana](https://img.shields.io/badge/Solana-devnet-9945FF?style=flat-square)](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)
+[![Solana](https://img.shields.io/badge/Solana-devnet-9945FF?style=flat-square)](https://explorer.solana.com/address/7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV?cluster=devnet)
 [![Anchor](https://img.shields.io/badge/Anchor-1.2-blue?style=flat-square)](https://anchor-lang.com)
 [![Pyth](https://img.shields.io/badge/Oracle-Pyth%20pull-7142CF?style=flat-square)](https://pyth.network)
 [![Tests](https://img.shields.io/badge/LiteSVM-12%2F12-14F195?style=flat-square)](packages/pot-index/tests)
@@ -92,7 +92,7 @@ Program reference with every instruction, account, limit and error code: [progra
 
 ## Live on devnet
 
-Program `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` ([Explorer](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)), 17 instructions, v1.1 since Oct 12. Five showcase POTFolios with live Pyth prices and test tokens:
+Program `7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV` ([Explorer](https://explorer.solana.com/address/7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV?cluster=devnet)), 18 instructions, v1.2 since Oct 13 (v1.1 stays live at `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr`). Five showcase POTFolios with live Pyth prices and test tokens:
 
 | POTFolio | Basket | Mint |
 |---|---|---|

@@ -1,5 +1,5 @@
 {
-  "address": "DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr",
+  "address": "7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV",
   "metadata": {
     "name": "pot_index",
     "version": "0.1.0",
@@ -854,7 +854,7 @@
         },
         {
           "name": "program",
-          "address": "DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr"
+          "address": "7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV"
         },
         {
           "name": "program_data"

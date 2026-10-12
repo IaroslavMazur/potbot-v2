@@ -65,7 +65,7 @@ export default function WorldsFairPage() {
         <ol className="list-decimal space-y-2 pl-5">
           <li>Open <Link href="/portfolios/PotSvA4ynuxbMFUA8SJSbULHhuTY1JcL5RaxnQz5FmM" className="text-pot-green underline">Solana Blue Chips</Link>. Connect a wallet in devnet mode, or sign in with email (a wallet is created for you).</li>
           <li>Click <b className="text-white">Get test USDC</b>: 1,000 test USDC and a little SOL for fees land in the wallet.</li>
-          <li><b className="text-white">Deposit 100</b>. One wallet prompt: Pyth prices are posted, your tokens are minted at NAV, and the basket is bought leg by leg. The activity feed shows every transaction.</li>
+          <li><b className="text-white">Deposit 100</b>. One signature: fresh Pyth prices, your tokens minted at NAV, then the basket is bought leg by leg. The activity feed shows every transaction.</li>
           <li><b className="text-white">Redeem</b>: move the slider, choose <i>Get the assets</i> (every asset in kind) or <i>Get USDC</i> (sold in the same transaction with an on-chain minimum). Your position card shows cost basis and P&amp;L.</li>
           <li>Optional: <Link href="/portfolios/new" className="text-pot-green underline">create your own POTFolio</Link> in one transaction and open it through your referral link from a second wallet.</li>
         </ol>
@@ -179,7 +179,7 @@ export default function WorldsFairPage() {
           </li>
           <li>
             <b>Single-ledger accounting:</b> the SPL index token supply is the only record of ownership. Mint on deposit at Pyth-priced
-            NAV (prices posted in the same transaction, max 30 s old with a 60 s cap in code, priced conservatively at price ± confidence), burn on exit.
+            NAV (prices posted in the same transaction, max 60 s old, a hard cap in code, priced conservatively at price ± confidence), burn on exit.
             Metaplex token metadata attached by the program, so the token has a name and logo in every wallet.
           </li>
           <li>
@@ -193,8 +193,9 @@ export default function WorldsFairPage() {
             only pause deposits or cap size.
           </li>
           <li>
-            <b>Deposit and allocate in one prompt:</b> after the deposit, the holder acts as keeper and buys the basket leg by leg
-            inside the same wallet approval. Cash deployments have no cooldown and are priced at mid.
+            <b>One signature per action:</b> a price operator refreshes Pyth prices, prepares the holder&apos;s single transaction for deposit,
+            exit or exit to USDC, verifies it after signing and submits it; after a deposit it buys the basket as keeper. The program checks
+            everything. Cash deployments have no cooldown and are priced at mid.
           </li>
           <li>
             <b>Five live POTFolios</b> across crypto majors, Solana natives, tokenized stocks and memes; keeper running; faucet with
@@ -206,7 +207,7 @@ export default function WorldsFairPage() {
             cooldown, oracle window and tick shopping, account substitution, gated instructions). Reviews on Oct 8 and Oct 10 against the
             Solana Foundation checklist, and on Oct 11 an independent human review by a Solana engineer: no fund-draining path, no
             criticals or highs. The Oct 11 review showed our Oct 10 oracle fix was not one (a pull oracle accepts old ticks posted now);
-            we shrank the window to 30 s with a 60 s cap in code, added the test, and published every finding, including the two trust
+            we set the window to 60 s as a hard cap in code, added the test, and published every finding, including the two trust
             points (program upgrades, asset registration) that go behind a multisig before mainnet.{' '}
             <a className="text-pot-green underline" href="https://github.com/YD811/potbot-v2/blob/main/docs/potfolio/security.md" target="_blank" rel="noreferrer">Full report</a>
           </li>

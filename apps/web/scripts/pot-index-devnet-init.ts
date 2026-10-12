@@ -20,6 +20,8 @@ import { buildWithPythUpdates } from '../src/lib/pot-index/pyth-post'
 import { grindKeypair, INDEX_MINT_PREFIX } from '../src/lib/pot-index/vanity'
 
 const RPC = process.env.POT_INDEX_RPC ?? 'https://api.devnet.solana.com'
+const BPF_LOADER_UPGRADEABLE = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111')
+const programDataPda = (programId: PublicKey) => PublicKey.findProgramAddressSync([programId.toBuffer()], BPF_LOADER_UPGRADEABLE)[0]
 const KEYPAIR = process.env.POT_INDEX_ADMIN_KEYPAIR ?? path.join(os.homedir(), '.config/solana/id.json')
 const OUT = path.join(__dirname, '../src/lib/pot-index/assets.devnet.json')
 // Pre-ground vanity mints (solana-keygen grind --starts-with Pot:N) in $POT_INDEX_VANITY_DIR; consumed one per Pot.
@@ -88,7 +90,8 @@ async function main() {
   if (!cfg) {
     await program.methods
       .initConfig(admin.publicKey, new (await import('@coral-xyz/anchor')).BN(30))
-      .accounts({ admin: admin.publicKey, config: configPda(), usdcMint: usdc, systemProgram: SystemProgram.programId })
+      // init_config only accepts the upgrade authority, checked against the program's ProgramData account.
+      .accounts({ admin: admin.publicKey, config: configPda(), usdcMint: usdc, program: program.programId, programData: programDataPda(program.programId), systemProgram: SystemProgram.programId })
       .rpc()
     console.log('config initialized')
   } else {

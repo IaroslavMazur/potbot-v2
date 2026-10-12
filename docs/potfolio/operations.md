@@ -58,10 +58,10 @@ v1.2 changes two account layouts: `Config` gains `pending_admin_expiry_slot` (15
 
 1. Back up `packages/pot-index/target/deploy/pot_index-keypair.json`, then create a new program keypair in its place (`solana-keygen new -o target/deploy/pot_index-keypair.json`) and run `anchor keys sync` (updates `declare_id!` and `Anchor.toml`).
 2. `anchor build` (devnet: default features), then copy `target/idl/pot_index.json` to `apps/web/src/lib/pot-index/idl.json`: the IDL carries the program address, and the web app reads it from there unless `NEXT_PUBLIC_POT_INDEX_PROGRAM_ID` is set.
-3. `anchor deploy --provider.cluster devnet`. The deployer becomes the upgrade authority, and only it can call `init_config`.
-4. `cd apps/web && npx tsx scripts/pot-index-devnet-init.ts` with `POT_INDEX_ADMIN_KEYPAIR` set to the deployer key: initializes `Config` with the pinned devnet USDC, registers the assets (posting a Pyth price for each), creates the showcase Pots and rewrites `assets.devnet.json`. Test mints are reused from the existing `assets.devnet.json`.
-5. Set the live price window: `npx tsx scripts/pot-index-set-config.ts price-age 30`.
-6. `migrate_config` is not needed on a fresh address.
+3. `anchor deploy --provider.cluster devnet`. The program is ~578 KB: the deployer needs about 8 SOL at the peak (~4 for the program account, ~4 for the deploy buffer, refunded). The deployer becomes the upgrade authority, and only it can call `init_config`.
+4. While US markets are open: `cd apps/web && npx tsx scripts/pot-index-devnet-init.ts` with `POT_INDEX_ADMIN_KEYPAIR` set to the deployer key. It initializes `Config` with the pinned devnet USDC and a 30 s price window, registers the assets, creates the showcase Pots and rewrites `assets.devnet.json`; test mints are reused from the existing `assets.devnet.json`. `register_asset` now needs a live price, and the TSLA and QQQ feeds only update in market hours: outside them, leave the stock assets out, run the script, and add them back in a later run (it skips what already exists).
+5. Replace the old address wherever it is written: `README.md`, `HACKATHON.md`, `SECURITY.md`, `docs/potfolio/README.md`, `apps/web/src/app/roadmap/page.tsx`, the deploy history above, `NEXT_PUBLIC_POT_INDEX_PROGRAM_ID` in Vercel if it is set, and any submission text.
+6. Do not run `price-age 30` afterwards: init already set it, and `set_config` refuses an update that changes nothing. `migrate_config` is not needed on a fresh address.
 
 ### Alternative: upgrade `DfKK…` in place
 1. Exit every Pot first (operator and test wallets): `Pot` lost a field, so after the upgrade the program can no longer read any existing Pot, and whatever is still inside stays there.

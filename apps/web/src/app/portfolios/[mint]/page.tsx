@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { PublicKey } from '@solana/web3.js'
 import {
   useMyIndexBalance,
@@ -111,13 +112,25 @@ export default function PotPage() {
   const run = async (fn: () => Promise<string | string[]>, okText: string | ((r: string | string[]) => string)) => {
     setBusy(true)
     setMsg(null)
+    const id = toast.loading('Confirm in your wallet…')
+    const started = Date.now()
     try {
       const r = await fn()
       const sig = Array.isArray(r) ? r[r.length - 1] : r
-      setMsg({ ok: true, text: typeof okText === 'function' ? okText(r) : okText, sig })
+      const text = typeof okText === 'function' ? okText(r) : okText
+      setMsg({ ok: true, text, sig })
+      toast.success(
+        <span>
+          {text} <span className="opacity-70">· {((Date.now() - started) / 1000).toFixed(0)} s</span>
+          {sig && <a className="ml-1 underline" href={explorerTx(sig)} target="_blank" rel="noreferrer">tx ↗</a>}
+        </span>,
+        { id, duration: 7000 },
+      )
     } catch (e) {
       reportClientError('pot-page', e, { pot: mint, wallet: pubkey?.toBase58() })
-      setMsg({ ok: false, text: friendlyError(e, { devnet: POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' }) })
+      const text = friendlyError(e, { devnet: POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' })
+      setMsg({ ok: false, text })
+      toast.error(text, { id, duration: 8000 })
     } finally {
       setBusy(false)
     }

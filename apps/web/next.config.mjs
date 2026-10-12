@@ -8,7 +8,6 @@ const config = {
   async redirects() {
     return [
       { source: '/pots', destination: '/vaults', permanent: false },
-      { source: '/dashboard', destination: '/portfolios', permanent: false },
       { source: '/my-pots', destination: '/portfolios', permanent: false },
       { source: '/beta', destination: '/signup', permanent: false },
       { source: '/pricing', destination: '/learn', permanent: false },

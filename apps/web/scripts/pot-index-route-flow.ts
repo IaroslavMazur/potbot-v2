@@ -55,6 +55,11 @@ async function main() {
     await connection.confirmTransaction(sig, 'confirmed')
     console.log('tx', `https://explorer.solana.com/tx/${sig}?cluster=devnet`)
   }
+  const cleanup = (res.cleanup as string[] | undefined) ?? []
+  if (cleanup.length) {
+    const c = await post('cleanup', { accounts: cleanup })
+    console.log('cleanup', (c.sigs as string[] | undefined)?.length ?? 0, 'txs')
+  }
 }
 
 main().catch((e) => {

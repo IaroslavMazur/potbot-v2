@@ -42,6 +42,11 @@ function withStage<T>(stage: string, p: Promise<T>): Promise<T> {
     throw err
   })
 }
+/** Give the operator its Pyth rent back once a session is over. Fire and forget. */
+function releasePrices(accounts: string[]) {
+  if (!accounts.length) return
+  void fetch('/api/pot-index/cleanup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accounts }), keepalive: true }).catch(() => {})
+}
 const TOOK_TOO_LONG = 'The wallet prompt took longer than a minute, so the prices in this bundle expired. Nothing changed. Confirm again, within a minute this time.'
 
 export function usePotIndexProgram() {
@@ -419,13 +424,15 @@ export function usePotIndexActions() {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares), blockhash }),
         }))
-        const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string }
+        const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string; cleanup?: string[] }
         if (!res.ok || !data.txs) throw new Error(data.error ?? 'market maker unavailable')
         const vtxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
+        const cleanup = data.cleanup ?? []
         const signed = await withStage(`exit-usdc:sign(${vtxs.length} txs, attempt ${attempt + 1})`, wallet.signAllTransactions
           ? (wallet.signAllTransactions(vtxs) as Promise<VersionedTransaction[]>)
           : Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction)))
         if (!(await bundleStillFresh(connection, signed[0], builtAt))) {
+          releasePrices(cleanup)
           if (last) throw new Error(TOOK_TOO_LONG)
           continue
         }
@@ -438,13 +445,14 @@ export function usePotIndexActions() {
             sigs.push(sig)
           }
         } catch (e) {
-          // Nothing landed yet and the node rejected the blockhash: rebuild once. Anything after the
-          // first transaction has landed is reported as is (the Pot's state is consistent either way:
-          // posting prices is harmless and the exit itself is one atomic transaction).
+          // Nothing landed yet and the node rejected the blockhash: rebuild once. The exit itself
+          // is one atomic transaction, so the Pot's state is consistent either way.
+          releasePrices(cleanup)
           const m = e instanceof Error ? e.message.toLowerCase() : ''
           if (i === 0 && !last && m.includes('blockhash not found')) continue
           throw e
         }
+        releasePrices(cleanup)
         break
       }
       await invalidate()

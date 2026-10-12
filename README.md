@@ -4,43 +4,95 @@
 
 ### Any basket of Solana assets. One liquid token.
 
-**Create a portfolio, hold the token.** Deposit USDC, receive a token that mirrors the whole basket, hold it anywhere a token works, redeem it any time for every asset inside or for USDC. Nobody can withdraw the assets: not the creator, not PotBot, not without a program upgrade or a malicious asset registration, both of which will sit behind a multisig.
+Pick up to 5 assets and weights. Holders deposit USDC and get a token that mirrors the whole basket. They can hold it, send it, trade it, and redeem it any time for every asset inside or for USDC. Nobody can withdraw the assets, because the program has no instruction for that.
 
-[potbot.fun](https://potbot.fun) · [Live POTFolios](https://potbot.fun/portfolios) · [How it works](https://potbot.fun/learn) · [For the judges](https://potbot.fun/worldsfair) · [@PotBot_sol](https://x.com/PotBot_sol)
+[potbot.fun](https://potbot.fun) · [Live POTFolios](https://potbot.fun/portfolios) · [How it works](https://potbot.fun/learn) · [Roadmap](https://potbot.fun/roadmap) · [Docs](docs/potfolio)
 
 [![CI](https://github.com/YD811/potbot-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/YD811/potbot-v2/actions/workflows/ci.yml)
 [![Solana](https://img.shields.io/badge/Solana-devnet-9945FF?style=flat-square)](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)
 [![Anchor](https://img.shields.io/badge/Anchor-1.2-blue?style=flat-square)](https://anchor-lang.com)
 [![Pyth](https://img.shields.io/badge/Oracle-Pyth%20pull-7142CF?style=flat-square)](https://pyth.network)
-[![MCP](https://img.shields.io/badge/MCP-native-14F195?style=flat-square)](https://www.npmjs.com/package/@potbot/mcp)
+[![Tests](https://img.shields.io/badge/LiteSVM-12%2F12-14F195?style=flat-square)](packages/pot-index/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
-Built for Colosseum **Crypto World's Fair** (Sept 14 to Oct 12, 2026). Third PotBot hackathon: v1 group trading in Telegram, v2 governed vaults, v3 the vault wrapped into a single liquid token.
+**Colosseum Crypto World's Fair entry (Sept 14 to Oct 12, 2026).** What was built during the Fair, where it lives and how to verify it in two minutes: **[HACKATHON.md](HACKATHON.md)** · [judges page](https://potbot.fun/worldsfair)
 
 </div>
 
 ---
 
-## 30 seconds
+## Contents
 
-```text
-creator:  pick up to 5 assets + weights  ──►  one transaction  ──►  POTFolio token exists (Pot… mint, name, logo)
-holder:   deposit USDC  ──►  Pyth prices posted in the same tx  ──►  tokens minted at NAV  ──►  basket bought in the same wallet prompt
-holder:   redeem any time  ──►  every asset in kind  or  USDC in one transaction (on-chain minimum, 0.10% conversion fee)
-nobody:   withdraw. There is no such instruction.
+1. [What it is](#what-it-is)
+2. [Try it in two minutes](#try-it-in-two-minutes)
+3. [How it works](#how-it-works)
+4. [Live on devnet](#live-on-devnet)
+5. [Security](#security)
+6. [Limits today and the path to mainnet](#limits-today-and-the-path-to-mainnet)
+7. [Repository map](#repository-map)
+8. [Build, test, run](#build-test-run)
+9. [Documentation](#documentation)
+10. [History](#history)
+
+## What it is
+
+A POTFolio is an on-chain basket with a token on top.
+
+| Role | What they do | What they cannot do |
+|---|---|---|
+| **Creator** | Picks 2 to 5 assets and weights, names the token, earns 40% of the entry fee forever. | Touch the assets. Can only pause deposits or cap the size. |
+| **Holder** | Deposits USDC, receives tokens at the basket's current value (NAV). Redeems any time for every asset in kind or for USDC in one transaction. | Be locked in. Exit needs no oracle, no keeper, and cannot be paused. |
+| **Keeper** | Buys and rebalances the basket toward target weights. Anyone can run one. | Trade past target, trade more than 25% of NAV at once, or deliver less than the Pyth-priced minimum. The whole transaction reverts. |
+| **PotBot** | Runs the site, the keeper and the price operator; takes 20% of the entry fee. | Withdraw. There is no such instruction. Upgrades and asset listing go behind a multisig before mainnet. |
+
+Fees: 0.30% on entry (40% creator, 40% referrer, 20% protocol), 0.50% on exit stays in the Pot for remaining holders, 0.10% on conversion to USDC. Details in [fees and economics](docs/potfolio/fees-and-economics.md).
+
+## Try it in two minutes
+
+On [potbot.fun/portfolios](https://potbot.fun/portfolios), devnet, with any Solana wallet or an email sign-in:
+
+1. Open a POTFolio and click **Get test USDC**. An empty wallet also receives a little SOL for fees.
+2. **Deposit.** One wallet prompt. The program mints your tokens at NAV; the basket is bought leg by leg right after, visible in the activity feed.
+3. **Redeem** for the assets or for USDC. One wallet prompt again.
+4. Open **My Dashboard** for your positions, share of each Pot, P&L, created Pots and invite links.
+
+Every step is a real devnet transaction with an Explorer link. The same flow from a terminal, through the same server routes the site uses:
+
+```bash
+cd apps/web
+POT_INDEX_WALLET_KEYPAIR=judge.json POT_INDEX_BASE_URL=https://potbot.fun \
+  npx tsx scripts/pot-index-operator-flow.ts faucet                 # 1,000 tUSDC + 0.1 SOL
+npx tsx scripts/pot-index-operator-flow.ts deposit   <mint> 40      # mint at NAV, basket bought
+npx tsx scripts/pot-index-operator-flow.ts exit      <mint> 5000000 # 5 tokens back in kind (base units)
+npx tsx scripts/pot-index-operator-flow.ts exit-usdc <mint> 15000000 # 15 tokens as USDC, on-chain minimum
 ```
 
-| Promise | How the program keeps it |
-|---|---|
-| No rug | Assets sit in Pot-owned PDAs. No withdraw instruction. Creator can only pause deposits or cap size. The two remaining trust points, program upgrades and asset registration, go behind a Squads multisig with a timelock before mainnet. |
-| No exit liquidity games | Exit burns tokens for a pro-rata share of every vault, needs no oracle, no keeper, cannot be paused. 0.50% stays with remaining holders. |
-| Honest price | Mint at NAV from Pyth pull updates posted in the same transaction; max 30 s old (cap 60 s in code), confidence ≤ 2%, priced at price ± conf against the Pot. |
-| Bounded keepers | `rebalance_open` / `rebalance_close` in one transaction (Instructions-sysvar introspection): toward target only, never past it, ≤ 25% of NAV per trade, ≥ Pyth value × (1 − slippage) or everything reverts. |
-| Creators earn | 0.30% entry fee split in the deposit tx: 40% creator, 40% referrer, 20% protocol. No custody, no liability. |
+## How it works
+
+```text
+creator   create_pot → add_leg ×2..5 → finalize_pot → set_index_metadata     one tx, token exists (Pot… mint, name, logo)
+holder    deposit(usdc)             → fee split → mint at Pyth NAV             one signature
+keeper    rebalance_open … swap … rebalance_close                               bounded, atomic, toward target only
+holder    exit(shares)              → every asset pro-rata, in kind            never pausable, no oracle
+holder    exit_usdc_open … sell legs … exit_usdc_close                        USDC in one tx, program-enforced minimum
+nobody    withdraw                                                              no such instruction
+```
+
+**Single ledger.** The SPL token supply is the only record of ownership. Mint on deposit, burn on exit, no internal balances to drift.
+
+**Honest price.** Deposits are priced from Pyth pull updates no older than 60 seconds (cap enforced in code), confidence at most 2%, priced at price ± confidence against the Pot. Stale prices block deposits, never exits.
+
+**One signature.** The price operator refreshes Pyth prices into persistent price accounts, prepares the single holder transaction and hands it to the wallet. After the holder signs, the operator submits it and, for deposits, buys the basket as keeper. The holder signs once; the program checks everything. Details in [operations](docs/potfolio/operations.md).
+
+**Bounded keepers.** `rebalance_open` reads the transaction through the Instructions sysvar and refuses unless a matching `rebalance_close` follows. Trades move toward target weights only, at most 25% of NAV per trade, and must deliver at least the Pyth value minus the slippage band, or everything reverts.
+
+**Metadata on-chain.** Metaplex metadata is attached by the program, so the token shows its name and logo in every wallet.
+
+Program reference with every instruction, account, limit and error code: [program.md](docs/potfolio/program.md).
 
 ## Live on devnet
 
-Program `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` ([Explorer](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)). Five showcase POTFolios with real Pyth prices and test tokens:
+Program `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` ([Explorer](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)), 17 instructions, v1.1 since Oct 12. Five showcase POTFolios with live Pyth prices and test tokens:
 
 | POTFolio | Basket | Mint |
 |---|---|---|
@@ -50,82 +102,80 @@ Program `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` ([Explorer](https://explo
 | Wall St on Solana `$WSTS` | TSLAx 40 / QQQx 40 / SOL 20 | [`Potsmds…`](https://potbot.fun/portfolios/PotsmdsvLcZGToyYs9XKcL9vVpGMbSV3UaFaA9EUZHH) |
 | Doge & Sol `$DGSL` | DOGE 60 / SOL 40 | [`Potsts7…`](https://potbot.fun/portfolios/Potsts7jB8dQPUN1MLU4TfqCPGkJTfwtrAVcHRBdp1q) |
 
-Try it: connect a devnet wallet (or sign in with email), click **Get test USDC** on any POTFolio (it also sends a little SOL for fees to an empty wallet), deposit, watch the basket get bought, redeem for the assets or for USDC. Every step shows up in the activity feed and on Explorer; the page keeps index price history and your cost basis and P&L.
+Anyone can create their own at [potbot.fun/portfolios/new](https://potbot.fun/portfolios/new). Devnet legs are test mints priced from real Pyth feeds; swaps run against a PotBot market maker. On mainnet the legs are the real tokens and the swaps go through Jupiter.
 
-A clean "judge run" from a wallet that had nothing, through the same server routes the UI calls, is scripted in `apps/web/scripts/pot-index-route-flow.ts`:
+## Security
 
-```bash
-cd apps/web
-POT_INDEX_WALLET_KEYPAIR=judge.json POT_INDEX_BASE_URL=https://potbot.fun \
-  npx tsx scripts/pot-index-route-flow.ts faucet                      # 1,000 tUSDC + 0.1 SOL
-npm run pot-index:flow -- deposit 100 --ref <referrer>                 # mint at NAV, fee split
-npx tsx scripts/pot-index-route-flow.ts allocate  <mint>               # buy the basket leg by leg
-npm run pot-index:flow -- exit 50                                      # half back in kind
-npx tsx scripts/pot-index-route-flow.ts exit-usdc <mint> <shares>      # the rest as USDC, on-chain minimum
-```
+Three reviews before the Fair closed: Oct 8 and Oct 10 against the Solana Foundation program-security checklist (the second by a reviewer that had not seen the code being written), and Oct 11 an independent human review by a Solana engineer. Result: no fund-draining path from an unprivileged account, no critical or high findings.
+
+The Oct 11 review showed that the Oct 10 oracle fix was not one: a pull oracle accepts old signed ticks posted now, so a slot check does not bound price age. The fix is the age window itself: 60 seconds, hard cap in code, with a test that rejects a 45-second-old tick 10% below market.
+
+What the program enforces: oracle age cap and conservative confidence pricing, rebalance deadband and cooldown, per-trade cap and slippage floor, two-step admin, exit safety valve against a stale rebalance flag, USDC cannot be registered as a leg, 1 USDC minimum deposit.
+
+Known and accepted on devnet: a depositor can self-refer from a second wallet (registered referrers later); the slippage band is a floor a keeper can take in full; upgrade authority and admin are one key until the Squads multisig lands. Every finding, with status, is in [security.md](docs/potfolio/security.md). Report issues per [SECURITY.md](SECURITY.md).
+
+## Limits today and the path to mainnet
+
+Fixed weights. Up to 5 assets. Devnet swaps through a PotBot market maker, not Jupiter. One operator key.
+
+Before the first mainnet deposit: Squads 2-of-3 multisig with a timelock on upgrade authority, admin and asset registration; deploy and `init_config` in one transaction; verified build on Explorer; external audit of the final version; Jupiter for exits to USDC; a capped flagship POTFolio. Then: Managed POTFolios (creator adjusts inside a public mandate with a timelock), Community POTFolios (holders vote with the token), 10 assets, a POTFolio/USDC pool on Meteora, Creator POTFolios built from a public profile. Live roadmap: [potbot.fun/roadmap](https://potbot.fun/roadmap) · [mainnet checklist](https://potbot.fun/mainnet).
 
 ## Repository map
 
 ```text
-packages/pot-index/        pot_index Anchor program (the POTFolio protocol) + LiteSVM tests      ← start here
-apps/web/                  Next.js app: landing, /portfolios, /portfolios/new, /portfolios/[mint], /learn, /roadmap, /worldsfair, /mainnet
-  src/lib/pot-index/       client builders, Pyth helpers, registry, garden levels
-  src/app/api/pot-index/   Hermes proxy, faucet, devnet market maker (exit to USDC, allocate), NAV history, token metadata
-  scripts/                 devnet init, keeper, flow (deposit / exit / exit-usdc / allocate), metadata
-docs/potfolio/             overview, program reference, fees, keepers, garden mode, security review, landscape, operations, FAQ
-packages/program/          pot_vault (PotBot v2 vaults, previous hackathon)      apps/potbot-mcp/  MCP server for AI agents
-packages/sdk/  apps/api/  apps/keeper/  apps/bot/                               PotBot v2 supporting services
+packages/pot-index/            pot_index Anchor program (the POTFolio protocol) + LiteSVM tests      ← start here
+  programs/pot_index/src/      lib.rs (17 instructions), instructions/, state/, oracle.rs, constants.rs
+  tests/pot_flow.rs            12 end-to-end tests
+apps/web/                      Next.js app: landing, /portfolios, /portfolios/new, /portfolios/[mint], /dashboard, /learn, /roadmap, /mainnet
+  src/lib/pot-index/           client builders, Pyth helpers, registry, operator (server), garden levels
+  src/app/api/pot-index/       tx/prepare + tx/submit (one-signature flow), faucet, NAV history, token metadata
+  src/hooks/usePotIndex.ts     deposit / exit / exit-usdc from the browser
+  scripts/                     devnet init, keeper, operator flow, metadata, config
+docs/potfolio/                 overview, program, fees, keepers, garden mode, security, landscape, operations, FAQ
+packages/program/              pot_vault: PotBot v2 governed vaults (previous hackathon, kept for reference)
+packages/sdk/  apps/api/  apps/keeper/  apps/bot/  apps/potbot-mcp/      PotBot v2 supporting services
 ```
 
-Hackathon work (Sept 14 to Oct 12, 2026) lives in `packages/pot-index`, `apps/web/src/{app/portfolios,lib/pot-index,hooks/usePotIndex.ts,components/pot-index,app/api/pot-index}`, `apps/web/scripts/pot-index-*`, `docs/potfolio`.
-
-## Program in one table
-
-| Instruction | Who | What |
-|---|---|---|
-| `create_pot` → `add_leg` × 2..5 → `finalize_pot` → `set_index_metadata` | creator | Pot PDA, one vault per asset + USDC cash vault, index mint (6 dec), Metaplex metadata. Weights lock at finalize. |
-| `deposit(amount, min_shares_out)` | anyone | 0.30% fee split, mint at NAV. Remaining accounts: `[vault_i, pyth_update_i]` per leg. |
-| `exit(shares, min_usdc_out)` | holder | Burn, receive every leg pro-rata in kind. Never pausable, no oracle. |
-| `exit_usdc_open` / `exit_usdc_close` | holder | Same, then sell the legs in the same tx (Jupiter on mainnet); `close` enforces the on-chain minimum and takes the 0.10% conversion fee. |
-| `rebalance_open` / `rebalance_close` | any keeper | Bounded flash trade, see table above. Cash deployment has no cooldown so a deposit can be allocated leg by leg in one prompt. |
-| `set_pot_params`, `update_index_metadata` | creator | Pause deposits, cap size, repoint the token's metadata URI. Nothing else. |
-| `init_config`, `set_config`, `transfer_admin` / `accept_admin`, `register_asset`, `set_asset_enabled` | admin | Protocol settings, two-step admin, asset allowlist (mint + Pyth feed). |
-
-Full reference, limits and all error codes: [`docs/potfolio/program.md`](docs/potfolio/program.md).
-
-## Build and test
+## Build, test, run
 
 ```bash
 # program (Anchor 1.2.1, Solana CLI 4.3, Rust 1.89)
 cd packages/pot-index
-./test.sh            # SBPF v0 build + LiteSVM suite (12): full flow, bounded rebalance, exit to USDC, referral paths, oracle window, account substitution, admin
-anchor build         # deployable artifact + IDL
+./test.sh                                  # SBPF build + LiteSVM suite, 12 tests
+anchor build                               # deployable artifact + IDL
 
 # web
 cd apps/web
-cp .env.example .env.local   # PYTH_API_KEY (Hermes), POT_INDEX_FAUCET_KEYPAIR (devnet faucet + market maker)
+cp .env.example .env.local                 # PYTH_API_KEY, POT_INDEX_FAUCET_KEYPAIR (devnet operator), NEXT_PUBLIC_SOLANA_RPC_URL
 npm install && npx next dev
 
-# devnet operations (see docs/potfolio/operations.md)
+# devnet operations (docs/potfolio/operations.md)
 npm run pot-index:init                     # assets, inventory, showcase Pots
 npm run pot-index:keeper -- --loop 300     # keeper over all showcase Pots
-npm run pot-index:flow -- deposit 100      # deposit / exit / exit-usdc / allocate / status
+npx tsx scripts/pot-index-set-config.ts show
 ```
 
-Tests cover: fee split with and without referrer, self-referral rejection, missing `close` and under-delivery reverting a rebalance, overshoot and oversized trades, stale prices blocking deposits but not exits, exit to USDC with minimum and conversion fee, cash deployment without cooldown, two-step admin and weight validation.
+CI runs the program tests and the web build on every push.
 
-## Security
+## Documentation
 
-Three reviews: Oct 8 and Oct 10 against the Solana Foundation program-security checklist (the second by a reviewer agent that had not seen the code being written), and Oct 11 an independent human review by a Solana engineer. No fund-draining path from an unprivileged account, no criticals or highs. The Oct 11 review found that the Oct 10 oracle fix was not a fix (a pull oracle accepts old ticks posted now): the window is now 30 s with a 60 s cap in code, with a test. Every finding, what changed and what is accepted is in [docs/potfolio/security.md](docs/potfolio/security.md). Oracle age cap and conservative confidence pricing, rebalance deadband and cooldown, two-step admin, exit safety valve against a stale rebalance flag, `init_if_needed` ATAs, 1 USDC minimum deposit. Known and accepted for the devnet build: a depositor can self-refer from a second wallet (registered referrers later); keeper slippage up to 1% is the implicit rebalance cost. Third-party audit, Squads multisig for upgrade authority and a capped flagship are on the [mainnet path](https://potbot.fun/mainnet). Report issues per [SECURITY.md](SECURITY.md).
+| Doc | What it covers |
+|---|---|
+| [overview.md](docs/potfolio/overview.md) | The product, the pivot from governed vaults to the token, who it is for |
+| [program.md](docs/potfolio/program.md) | Every instruction, account, limit and error code |
+| [fees-and-economics.md](docs/potfolio/fees-and-economics.md) | Fee split, creator and referrer economics, revenue model |
+| [keepers.md](docs/potfolio/keepers.md) | Rebalance bounds, keeper incentives, price operator |
+| [security.md](docs/potfolio/security.md) | Three reviews, every finding and its status, trust model |
+| [operations.md](docs/potfolio/operations.md) | Deploy history, one-signature flow, judge run |
+| [landscape.md](docs/potfolio/landscape.md) | Symmetry, Cesto, DiversiFi, GLAM, Ondo and what POTFolio adds |
+| [faq.md](docs/potfolio/faq.md) | Questions holders and creators ask |
 
-## What is next
+## History
 
-Fixed weights today. Next: exit to USDC through Jupiter on mainnet, Managed POTFolios (creator adjusts inside a public mandate with a timelock), Community POTFolios (holders vote with the token), 10 assets, a POTFolio/USDC pool on Meteora, Bot digest for holders. Roadmap: [potbot.fun/roadmap](https://potbot.fun/roadmap).
+PotBot started as a Telegram group that wanted to trade from one wallet. Three Colosseum hackathons, one idea:
 
-## PotBot v2 (previous hackathon)
+1. **Group trading** (v1): a shared pot, votes on trades, one treasury for the group.
+2. **Governed vaults** (v2, Solana Frontier): non-custodial vaults with strategies, capital in program-owned accounts, the group governs. Program `pot_vault`, MCP server for AI agents. Kept in this repo under `packages/program` and `apps/`.
+3. **The token** (POTFolio, Crypto World's Fair): the vault wrapped into a single liquid token anyone can hold. This is the product PotBot keeps building after the Fair.
 
-Governed group vaults (`pot_vault`, devnet `GJap9DjUoKZ9dhXMqGCPTeTzY6kPyBJ51SXL1pi8AmiK`): members deposit, propose trades, vote, the program executes through Jupiter. MCP server `@potbot/mcp` exposes vaults to AI agents. Docs under [`docs/architecture`](docs/architecture). The vault UI is kept for reference while it is reworked; POTFolio is the live product.
-
----
-
-Founder: Yehor (YD), Amsterdam. [@CryptoYDao](https://x.com/CryptoYDao) · Y-DAO Amsterdam · Superteam NL. MIT license.
+Founder: Yehor (YD), Amsterdam. Y-DAO Amsterdam · Superteam NL. MIT license.

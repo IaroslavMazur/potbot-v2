@@ -41,13 +41,25 @@ Scripts: `scripts/pot-index-operator-flow.ts deposit|exit|exit-usdc|faucet` driv
 Deployer balance and keys stay out of git. Mainnet: see `apps/web/src/app/mainnet` and `docs/operations/deploy.md`.
 
 ## Mainnet deploy checklist (from the Oct 11 review)
-- Deploy and `init_config` in **one transaction** (F4): the first caller becomes admin.
+- `init_config` accepts only the program's upgrade authority as signer (F4). Deploying and initializing in one transaction is not possible: a program is callable only from the slot after its deployment.
+- Build with `anchor build -- --features mainnet`: `init_config` accepts only the USDC mint compiled in (`USDC_MINT`), and the default build pins the devnet test USDC, so a default build fails `init_config` on mainnet.
 - `max_price_age_secs = 30` at init (cap 60 in code).
 - Verified build published on Explorer before the first deposit.
 - Upgrade authority, protocol admin and `register_asset` on a Squads 2-of-3 with a timelock (F2, F3) before the first deposit.
 - Publish the allowlist with mint ↔ Pyth feed pairs so anyone can verify registrations.
 - Only allowlist mints without a freeze authority, or document the exposure per asset (F8).
 - Token metadata JSON and images on the production domain or Arweave; Token-2022 metadata at the migration (F14).
+
+## Upgrading a v1.1 deployment (Config migration)
+v1.2 appends `pending_admin_expiry_slot` to `Config` (154 → 162 bytes). The new program cannot load the old account, so the upgrade and the migration go back to back:
+
+1. `anchor build` (devnet: default features) and copy `target/idl/pot_index.json` to `apps/web/src/lib/pot-index/idl.json`.
+2. Upgrade the program (`anchor upgrade` or `solana program deploy --program-id …`).
+3. Immediately: `cd apps/web && npx tsx scripts/pot-index-set-config.ts migrate` with the admin keypair. `migrate_config` checks the account's owner, discriminator, old size and admin, tops up rent and grows the account in place; the old fields keep their offsets and the new one reads 0. Until it runs, every instruction that loads `Config` fails: deposits, rebalances, exit to USDC, admin. In-kind `exit` does not load `Config` and keeps working throughout.
+4. Check: `pot-index-set-config.ts show` prints the same admin, treasury and price age as before; `solana account <config PDA>` shows 162 bytes. A second `migrate` fails with `ConfigAlreadyMigrated`.
+5. An admin proposal made before the upgrade is void after it (its expiry reads 0): propose again.
+6. Client changes in the same release: `set_asset_enabled` is now `update_asset({ enabled, feedId })`; `register_asset` and a feed change in `update_asset` take a `priceUpdate` account (post the price in the same transaction, as `pot-index-devnet-init.ts` does).
+7. Once every deployment is migrated, delete `migrate_config`; a fresh deployment initializes in the current layout and never needs it.
 
 ## Known devnet limits
 Free Pyth tier: SOL, BTC, ETH, BNB, XRP, DOGE, JitoSOL, PYTH, USDC, TSLA, QQQ only. Equity feeds stop on weekends: deposits into stock Pots fail with `StalePrice` until market open; exits work. Public devnet RPC rate-limits: activity fetch is chunked and refetched every 45 to 90 s.

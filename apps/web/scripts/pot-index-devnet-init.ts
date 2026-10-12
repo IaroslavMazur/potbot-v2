@@ -16,6 +16,7 @@ import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConf
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token'
 import idl from '../src/lib/pot-index/idl.json'
 import { assetPda, buildCreatePot, configPda, feedIdToBytes, potPda } from '../src/lib/pot-index/client'
+import { buildWithPythUpdates } from '../src/lib/pot-index/pyth-post'
 import { grindKeypair, INDEX_MINT_PREFIX } from '../src/lib/pot-index/vanity'
 
 const RPC = process.env.POT_INDEX_RPC ?? 'https://api.devnet.solana.com'
@@ -100,10 +101,19 @@ async function main() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const acc = await (program.account as any).assetConfig.fetchNullable(assetPda(mint))
     if (acc) continue
-    await program.methods
-      .registerAsset(feedIdToBytes(a.feed))
-      .accounts({ admin: admin.publicKey, config: configPda(), mint, asset: assetPda(mint), systemProgram: SystemProgram.programId })
-      .rpc()
+    // register_asset refuses a feed without a live price, so post one in the same transaction.
+    const txs = await buildWithPythUpdates(connection, wallet, [a.feed], async ([priceUpdate]) => [
+      await program.methods
+        .registerAsset(feedIdToBytes(a.feed))
+        .accounts({ admin: admin.publicKey, config: configPda(), mint, priceUpdate, asset: assetPda(mint), systemProgram: SystemProgram.programId })
+        .instruction(),
+    ])
+    for (const { tx, signers } of txs) {
+      if (signers.length) tx.sign(signers as never[])
+      const signed = await wallet.signTransaction(tx)
+      const sig = await connection.sendRawTransaction(signed.serialize())
+      await connection.confirmTransaction(sig, 'confirmed')
+    }
     console.log('registered', a.sym)
   }
 
@@ -124,7 +134,7 @@ async function main() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const a = await (program.account as any).assetConfig.fetchNullable(assetPda(jupMint))
     if (a?.enabled) {
-      await program.methods.setAssetEnabled(false).accounts({ admin: admin.publicKey, config: configPda(), asset: assetPda(jupMint) }).rpc()
+      await program.methods.updateAsset({ enabled: false, feedId: null }).accounts({ admin: admin.publicKey, config: configPda(), asset: assetPda(jupMint), priceUpdate: null }).rpc()
       console.log('disabled asset JUP')
     }
     if (existing.flagship) {

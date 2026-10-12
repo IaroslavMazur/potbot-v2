@@ -6,12 +6,12 @@ use {
     anchor_lang::{
         prelude::{Clock, Pubkey},
         solana_program::instruction::{AccountMeta, Instruction},
-        AccountDeserialize, AccountSerialize, InstructionData, ToAccountMetas,
+        AccountDeserialize, AccountSerialize, InstructionData, Space, ToAccountMetas,
     },
     litesvm::LiteSVM,
     pot_index::{
-        constants::{ASSET_SEED, CONFIG_SEED, POT_SEED},
-        state::{Config, Pot},
+        constants::{ASSET_SEED, CONFIG_SEED, PENDING_ADMIN_TTL_SLOTS, POT_SEED, USDC_MINT},
+        state::{AssetConfig, Config, Pot},
     },
     pyth_solana_receiver_sdk::price_update::{PriceFeedMessage, PriceUpdateV2, VerificationLevel},
     solana_account::Account as RawAccount,
@@ -26,6 +26,7 @@ const TOKEN: Pubkey = anchor_spl::token::ID;
 const ATA_PROGRAM: Pubkey = anchor_spl::associated_token::ID;
 const SYSTEM: Pubkey = anchor_lang::solana_program::system_program::ID;
 const INSTRUCTIONS_SYSVAR: Pubkey = anchor_lang::compat::solana_instructions_sysvar::ID;
+const UPGRADEABLE_LOADER: Pubkey = anchor_lang::solana_program::bpf_loader_upgradeable::ID;
 
 const NOW: i64 = 1_760_000_000;
 const SOL_FEED: [u8; 32] = [1u8; 32];
@@ -54,7 +55,10 @@ fn pda(seeds: &[&[u8]]) -> Pubkey {
 }
 
 fn set_mint(svm: &mut LiteSVM, decimals: u8) -> Pubkey {
-    let key = Keypair::new().pubkey();
+    set_mint_at(svm, Keypair::new().pubkey(), decimals)
+}
+
+fn set_mint_at(svm: &mut LiteSVM, key: Pubkey, decimals: u8) -> Pubkey {
     // spl-token Mint layout (82 bytes): COption<authority> 36 | supply 8 | decimals 1 | init 1 | COption<freeze> 36
     let mut data = vec![0u8; 82];
     data[44] = decimals;
@@ -95,10 +99,22 @@ fn set_price(svm: &mut LiteSVM, feed: [u8; 32], price: i64, conf: u64, publish_t
 /// (Re)write a price update account at `key`, posted in the current slot (the program refuses
 /// updates posted more than MAX_POSTED_SLOT_AGE slots ago).
 fn write_price(svm: &mut LiteSVM, key: Pubkey, feed: [u8; 32], price: i64, conf: u64, publish_time: i64) {
+    write_price_verified(svm, key, feed, price, conf, publish_time, VerificationLevel::Full);
+}
+
+fn write_price_verified(
+    svm: &mut LiteSVM,
+    key: Pubkey,
+    feed: [u8; 32],
+    price: i64,
+    conf: u64,
+    publish_time: i64,
+    verification_level: VerificationLevel,
+) {
     let slot = svm.get_sysvar::<Clock>().slot;
     let upd = PriceUpdateV2 {
         write_authority: Pubkey::default(),
-        verification_level: VerificationLevel::Full,
+        verification_level,
         price_message: PriceFeedMessage {
             feed_id: feed,
             price,
@@ -138,7 +154,8 @@ fn ix(data: impl InstructionData, accounts: impl ToAccountMetas, remaining: Vec<
     Instruction::new_with_bytes(PROGRAM, &data.data(), metas)
 }
 
-fn setup() -> World {
+/// A LiteSVM with the program loaded and the clock set, before `init_config`.
+fn boot() -> LiteSVM {
     let mut svm = LiteSVM::new();
     let bytes = include_bytes!(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/pot_index.so"));
     svm.add_program(PROGRAM, bytes).unwrap();
@@ -146,6 +163,38 @@ fn setup() -> World {
     clock.unix_timestamp = NOW;
     clock.slot = 100;
     svm.set_sysvar(&clock);
+    svm
+}
+
+/// LiteSVM deploys with no upgrade authority; set one so `init_config` can check it.
+/// Returns the ProgramData address.
+fn set_upgrade_authority(svm: &mut LiteSVM, authority: &Pubkey) -> Pubkey {
+    let program_data = Pubkey::find_program_address(&[PROGRAM.as_ref()], &UPGRADEABLE_LOADER).0;
+    let mut acc = svm.get_account(&program_data).unwrap();
+    // UpgradeableLoaderState::ProgramData (bincode): variant u32 | slot u64 | Option tag u8 | Pubkey
+    acc.data[12] = 1;
+    acc.data[13..45].copy_from_slice(authority.as_ref());
+    svm.set_account(program_data, acc).unwrap();
+    program_data
+}
+
+fn init_config_ix(admin: &Pubkey, treasury: Pubkey, usdc_mint: Pubkey, program_data: Pubkey) -> Instruction {
+    ix(
+        pot_index::instruction::InitConfig { treasury, max_price_age_secs: 30 },
+        pot_index::accounts::InitConfig {
+            admin: *admin,
+            config: pda(&[CONFIG_SEED]),
+            usdc_mint,
+            program: PROGRAM,
+            program_data,
+            system_program: SYSTEM,
+        },
+        vec![],
+    )
+}
+
+fn setup() -> World {
+    let mut svm = boot();
 
     let admin = Keypair::new();
     let creator = Keypair::new();
@@ -157,27 +206,18 @@ fn setup() -> World {
         svm.airdrop(&k.pubkey(), 10_000_000_000).unwrap();
     }
 
-    let usdc = set_mint(&mut svm, 6);
+    let usdc = set_mint_at(&mut svm, USDC_MINT, 6);
     let sol = set_mint(&mut svm, 9);
     let jup = set_mint(&mut svm, 6);
     let sol_price = set_price(&mut svm, SOL_FEED, SOL_PRICE, 10_000_000, NOW - 5);
     let jup_price = set_price(&mut svm, JUP_FEED, JUP_PRICE, 100_000, NOW - 5);
     let config = pda(&[CONFIG_SEED]);
 
-    // init_config
-    send(
-        &mut svm,
-        &[ix(
-            pot_index::instruction::InitConfig { treasury, max_price_age_secs: 30 },
-            pot_index::accounts::InitConfig { admin: admin.pubkey(), config, usdc_mint: usdc, system_program: SYSTEM },
-            vec![],
-        )],
-        &admin,
-        &[],
-    )
-    .unwrap();
+    // init_config, by the upgrade authority
+    let program_data = set_upgrade_authority(&mut svm, &admin.pubkey());
+    send(&mut svm, &[init_config_ix(&admin.pubkey(), treasury, usdc, program_data)], &admin, &[]).unwrap();
     // register assets
-    for (mint, feed) in [(sol, SOL_FEED), (jup, JUP_FEED)] {
+    for (mint, feed, price_update) in [(sol, SOL_FEED, sol_price), (jup, JUP_FEED, jup_price)] {
         send(
             &mut svm,
             &[ix(
@@ -186,6 +226,7 @@ fn setup() -> World {
                     admin: admin.pubkey(),
                     config,
                     mint,
+                    price_update,
                     asset: pda(&[ASSET_SEED, mint.as_ref()]),
                     system_program: SYSTEM,
                 },
@@ -649,18 +690,25 @@ fn weights_must_sum_and_config_is_admin_only() {
     assert_eq!(cfg.admin, w.admin.pubkey());
     assert_eq!(cfg.pot_count, 1);
 
-    // Price age above the protocol limit is refused; two-step admin transfer works.
-    let too_old = ix(
-        pot_index::instruction::SetConfig {
-            update: pot_index::instructions::admin::ConfigUpdate {
-                paused: None, max_price_age_secs: Some(61), treasury: None, new_admin: None,
+    // Price age outside 1..=limit is refused; two-step admin transfer works.
+    for bad_age in [0, 61] {
+        let i = ix(
+            pot_index::instruction::SetConfig {
+                update: pot_index::instructions::admin::ConfigUpdate {
+                    paused: None, max_price_age_secs: Some(bad_age), treasury: None, new_admin: None,
+                },
             },
-        },
-        pot_index::accounts::AdminOnly { admin: w.admin.pubkey(), config: w.config },
-        vec![],
-    );
-    let err = send(&mut w.svm, &[too_old], &w.admin, &[]).unwrap_err();
-    assert!(err.contains("PriceAgeTooLong"), "{err}");
+            pot_index::accounts::AdminOnly { admin: w.admin.pubkey(), config: w.config },
+            vec![],
+        );
+        let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+        assert!(err.contains("PriceAgeOutOfRange"), "{bad_age}: {err}");
+    }
+
+    // Nothing pending: nobody can accept.
+    let early = ix(pot_index::instruction::AcceptAdmin {}, pot_index::accounts::AcceptAdmin { new_admin: w.creator.pubkey(), config: w.config }, vec![]);
+    let err = send(&mut w.svm, &[early], &w.creator, &[]).unwrap_err();
+    assert!(err.contains("NotPendingAdmin"), "{err}");
 
     let propose = ix(
         pot_index::instruction::SetConfig {
@@ -678,9 +726,11 @@ fn weights_must_sum_and_config_is_admin_only() {
     let err = send(&mut w.svm, &[wrong], &w.user, &[]).unwrap_err();
     assert!(err.contains("NotPendingAdmin"), "{err}");
     let accept = ix(pot_index::instruction::AcceptAdmin {}, pot_index::accounts::AcceptAdmin { new_admin: w.creator.pubkey(), config: w.config }, vec![]);
+    w.svm.expire_blockhash(); // same bytes as the refused `early` accept otherwise
     send(&mut w.svm, &[accept], &w.creator, &[]).unwrap();
     let cfg = Config::try_deserialize(&mut &w.svm.get_account(&w.config).unwrap().data[..]).unwrap();
     assert_eq!(cfg.admin, w.creator.pubkey());
+    assert_eq!(cfg.pending_admin, Pubkey::default(), "pending entry cleared on accept");
 }
 
 
@@ -931,7 +981,7 @@ fn tick_shopping_is_bounded_by_price_age() {
         vec![],
     );
     let err = send(&mut w.svm, &[widen], &w.admin, &[]).unwrap_err();
-    assert!(err.contains("PriceAgeTooLong"), "{err}");
+    assert!(err.contains("PriceAgeOutOfRange"), "{err}");
 }
 
 /// F5: the cash currency cannot be registered as an asset.
@@ -945,6 +995,7 @@ fn usdc_cannot_be_a_leg() {
             admin: w.admin.pubkey(),
             config: w.config,
             mint: usdc,
+            price_update: w.sol_price,
             asset: pda(&[ASSET_SEED, usdc.as_ref()]),
             system_program: SYSTEM,
         },
@@ -1033,6 +1084,7 @@ fn creator_and_admin_instructions_are_gated() {
             admin: w.creator.pubkey(),
             config: w.config,
             mint: other,
+            price_update: w.sol_price,
             asset: pda(&[ASSET_SEED, other.as_ref()]),
             system_program: SYSTEM,
         },
@@ -1040,4 +1092,231 @@ fn creator_and_admin_instructions_are_gated() {
     );
     let err = send(&mut w.svm, &[i], &w.creator, &[]).unwrap_err();
     assert!(err.contains("Unauthorized") || err.contains("ConstraintHasOne"), "{err}");
+}
+
+/// F4: only the upgrade authority can initialize, and only with the USDC mint compiled into the
+/// build, so a first caller can neither take the admin role nor bind a look-alike mint.
+#[test]
+fn init_config_requires_upgrade_authority_and_pinned_usdc() {
+    let mut svm = boot();
+    let deployer = Keypair::new();
+    let stranger = Keypair::new();
+    for k in [&deployer, &stranger] {
+        svm.airdrop(&k.pubkey(), 10_000_000_000).unwrap();
+    }
+    let usdc = set_mint_at(&mut svm, USDC_MINT, 6);
+    let fake = set_mint(&mut svm, 6);
+    let program_data = set_upgrade_authority(&mut svm, &deployer.pubkey());
+
+    let i = init_config_ix(&stranger.pubkey(), stranger.pubkey(), usdc, program_data);
+    let err = send(&mut svm, &[i], &stranger, &[]).unwrap_err();
+    assert!(err.contains("NotUpgradeAuthority"), "{err}");
+
+    let i = init_config_ix(&deployer.pubkey(), deployer.pubkey(), fake, program_data);
+    let err = send(&mut svm, &[i], &deployer, &[]).unwrap_err();
+    assert!(err.contains("BadUsdcMint"), "{err}");
+
+    let i = init_config_ix(&deployer.pubkey(), deployer.pubkey(), usdc, program_data);
+    send(&mut svm, &[i], &deployer, &[]).unwrap();
+}
+
+/// `register_asset` needs a live price for the feed it binds: a price account for another feed,
+/// or a stale one, is refused before the asset exists.
+#[test]
+fn register_asset_requires_a_live_feed() {
+    let mut w = setup();
+    let other = set_mint(&mut w.svm, 9);
+    let register = |w: &World, price_update: Pubkey| {
+        ix(
+            pot_index::instruction::RegisterAsset { feed_id: SOL_FEED },
+            pot_index::accounts::RegisterAsset {
+                admin: w.admin.pubkey(),
+                config: w.config,
+                mint: other,
+                price_update,
+                asset: pda(&[ASSET_SEED, other.as_ref()]),
+                system_program: SYSTEM,
+            },
+            vec![],
+        )
+    };
+    // Price account for a different feed.
+    let i = register(&w, w.jup_price);
+    let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("StalePrice"), "{err}");
+    // Right feed, published outside the 30 s window.
+    write_price(&mut w.svm, w.sol_price, SOL_FEED, SOL_PRICE, 10_000_000, NOW - 45);
+    let i = register(&w, w.sol_price);
+    let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("StalePrice"), "{err}");
+    // Fresh price for the right feed (advance_slots reposts it and expires the blockhash, so this
+    // transaction is not a byte-identical replay of the refused one).
+    advance_slots(&mut w, 1);
+    let i = register(&w, w.sol_price);
+    send(&mut w.svm, &[i], &w.admin, &[]).unwrap();
+}
+
+fn set_config_ix(w: &World, update: pot_index::instructions::admin::ConfigUpdate) -> Instruction {
+    ix(
+        pot_index::instruction::SetConfig { update },
+        pot_index::accounts::AdminOnly { admin: w.admin.pubkey(), config: w.config },
+        vec![],
+    )
+}
+
+fn config_update(paused: Option<bool>, new_admin: Option<Pubkey>) -> pot_index::instructions::admin::ConfigUpdate {
+    pot_index::instructions::admin::ConfigUpdate { paused, max_price_age_secs: None, treasury: None, new_admin }
+}
+
+fn read_config(w: &World) -> Config {
+    Config::try_deserialize(&mut &w.svm.get_account(&w.config).unwrap().data[..]).unwrap()
+}
+
+/// `set_config` must change something; an admin proposal expires after PENDING_ADMIN_TTL_SLOTS
+/// and can be cancelled with the default key.
+#[test]
+fn set_config_rejects_no_ops_and_admin_proposals_expire() {
+    let mut w = setup();
+    let creator = w.creator.pubkey();
+    let accept = ix(pot_index::instruction::AcceptAdmin {}, pot_index::accounts::AcceptAdmin { new_admin: creator, config: w.config }, vec![]);
+
+    // Empty update, and an update to the value already set, are both refused.
+    for u in [config_update(None, None), config_update(Some(false), None)] {
+        let err = { let i = set_config_ix(&w, u); send(&mut w.svm, &[i], &w.admin, &[]) }.unwrap_err();
+        assert!(err.contains("NothingToUpdate"), "{err}");
+    }
+
+    // Propose, then cancel with the default key.
+    { let i = set_config_ix(&w, config_update(None, Some(creator))); send(&mut w.svm, &[i], &w.admin, &[]) }.unwrap();
+    let cfg = read_config(&w);
+    assert_eq!(cfg.pending_admin, creator);
+    assert_eq!(cfg.pending_admin_expiry_slot, 100 + PENDING_ADMIN_TTL_SLOTS);
+    { let i = set_config_ix(&w, config_update(None, Some(Pubkey::default()))); send(&mut w.svm, &[i], &w.admin, &[]) }.unwrap();
+    let cfg = read_config(&w);
+    assert_eq!((cfg.pending_admin, cfg.pending_admin_expiry_slot), (Pubkey::default(), 0));
+    let err = send(&mut w.svm, std::slice::from_ref(&accept), &w.creator, &[]).unwrap_err();
+    assert!(err.contains("NotPendingAdmin"), "{err}");
+
+    // Propose again and let it expire.
+    w.svm.expire_blockhash();
+    { let i = set_config_ix(&w, config_update(None, Some(creator))); send(&mut w.svm, &[i], &w.admin, &[]) }.unwrap();
+    advance_slots(&mut w, PENDING_ADMIN_TTL_SLOTS + 1);
+    let err = send(&mut w.svm, std::slice::from_ref(&accept), &w.creator, &[]).unwrap_err();
+    assert!(err.contains("PendingAdminExpired"), "{err}");
+
+    // A fresh proposal accepted inside the window transfers the role.
+    { let i = set_config_ix(&w, config_update(None, Some(creator))); send(&mut w.svm, &[i], &w.admin, &[]) }.unwrap();
+    w.svm.expire_blockhash();
+    send(&mut w.svm, &[accept], &w.creator, &[]).unwrap();
+    let cfg = read_config(&w);
+    assert_eq!((cfg.admin, cfg.pending_admin, cfg.pending_admin_expiry_slot), (creator, Pubkey::default(), 0));
+}
+
+/// `migrate_config` grows a v1.1 Config (no `pending_admin_expiry_slot`) in place, keeps every
+/// field, is admin-only, and runs once.
+#[test]
+fn migrate_config_grows_a_v1_1_config() {
+    let mut w = setup();
+    let current = w.svm.get_account(&w.config).unwrap();
+    let before = Config::try_deserialize(&mut &current.data[..]).unwrap();
+    let old_len = 8 + Config::INIT_SPACE - 8;
+    let mut old = current.clone();
+    old.data.truncate(old_len);
+    old.lamports = w.svm.minimum_balance_for_rent_exemption(old_len);
+    w.svm.set_account(w.config, old).unwrap();
+
+    // Until migrated, instructions that load Config fail.
+    let pause = set_config_ix(&w, config_update(Some(true), None));
+    let err = send(&mut w.svm, std::slice::from_ref(&pause), &w.admin, &[]).unwrap_err();
+    assert!(err.contains("AccountDidNotDeserialize"), "{err}");
+
+    let migrate = |signer: Pubkey| {
+        ix(
+            pot_index::instruction::MigrateConfig {},
+            pot_index::accounts::MigrateConfig { admin: signer, config: w.config, system_program: SYSTEM },
+            vec![],
+        )
+    };
+    let err = send(&mut w.svm, &[migrate(w.creator.pubkey())], &w.creator, &[]).unwrap_err();
+    assert!(err.contains("Unauthorized"), "{err}");
+    send(&mut w.svm, &[migrate(w.admin.pubkey())], &w.admin, &[]).unwrap();
+
+    let acc = w.svm.get_account(&w.config).unwrap();
+    assert_eq!(acc.data.len(), 8 + Config::INIT_SPACE);
+    assert!(acc.lamports >= w.svm.minimum_balance_for_rent_exemption(acc.data.len()));
+    let after = Config::try_deserialize(&mut &acc.data[..]).unwrap();
+    assert_eq!(
+        (after.admin, after.pending_admin, after.treasury, after.usdc_mint, after.max_price_age_secs, after.paused, after.pot_count, after.bump),
+        (before.admin, before.pending_admin, before.treasury, before.usdc_mint, before.max_price_age_secs, before.paused, before.pot_count, before.bump),
+    );
+    assert_eq!(after.pending_admin_expiry_slot, 0);
+
+    w.svm.expire_blockhash();
+    let err = send(&mut w.svm, &[migrate(w.admin.pubkey())], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("ConfigAlreadyMigrated"), "{err}");
+    send(&mut w.svm, &[pause], &w.admin, &[]).unwrap();
+}
+
+/// `update_asset` toggles an asset and repoints its feed (with a live price for the new feed);
+/// Pots built earlier keep the feed their legs copied at `add_leg`.
+#[test]
+fn update_asset_toggles_and_repoints_the_feed() {
+    const NEW_FEED: [u8; 32] = [3u8; 32];
+    let mut w = setup();
+    let k = create_pot(&mut w, (5000, 5000), 1000);
+    let asset = pda(&[ASSET_SEED, w.sol.as_ref()]);
+    let update = |w: &World, enabled: Option<bool>, feed_id: Option<[u8; 32]>, price_update: Option<Pubkey>| {
+        ix(
+            pot_index::instruction::UpdateAsset { update: pot_index::instructions::admin::AssetUpdate { enabled, feed_id } },
+            pot_index::accounts::UpdateAsset { admin: w.admin.pubkey(), config: w.config, asset, price_update },
+            vec![],
+        )
+    };
+    let read_asset = |w: &World| AssetConfig::try_deserialize(&mut &w.svm.get_account(&asset).unwrap().data[..]).unwrap();
+
+    for i in [update(&w, None, None, None), update(&w, Some(true), None, None)] {
+        let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+        assert!(err.contains("NothingToUpdate"), "{err}");
+    }
+    let i = update(&w, Some(false), None, None);
+    send(&mut w.svm, &[i], &w.admin, &[]).unwrap();
+    assert!(!read_asset(&w).enabled);
+    w.svm.expire_blockhash(); // same bytes as the refused no-op above otherwise
+    let i = update(&w, Some(true), None, None);
+    send(&mut w.svm, &[i], &w.admin, &[]).unwrap();
+    assert!(read_asset(&w).enabled);
+
+    let new_price = set_price(&mut w.svm, NEW_FEED, SOL_PRICE, 10_000_000, NOW - 5);
+    let i = update(&w, None, Some(NEW_FEED), None);
+    let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("MissingPriceUpdate"), "{err}");
+    let i = update(&w, None, Some(NEW_FEED), Some(w.sol_price));
+    let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("StalePrice"), "{err}");
+    let i = update(&w, None, Some(NEW_FEED), Some(new_price));
+    send(&mut w.svm, &[i], &w.admin, &[]).unwrap();
+    assert_eq!(read_asset(&w).feed_id, NEW_FEED);
+    assert_eq!(read_pot(&w.svm, &k.pot).legs[0].feed_id, SOL_FEED, "existing legs keep their feed");
+}
+
+/// F10: a price update that is only partially verified by Wormhole guardians is refused.
+#[test]
+fn partially_verified_price_is_refused() {
+    let mut w = setup();
+    let k = create_pot(&mut w, (5000, 5000), 1000);
+    let c = w.creator.insecure_clone();
+    finalize(&mut w, &k, &c).unwrap();
+    let user = w.user.pubkey();
+    set_ata(&mut w.svm, &w.usdc, &user, 1_000_000_000);
+    set_ata(&mut w.svm, &k.index_mint, &user, 0);
+    set_ata(&mut w.svm, &w.usdc, &w.creator.pubkey(), 0);
+    set_ata(&mut w.svm, &w.usdc, &w.treasury, 0);
+
+    let partial = VerificationLevel::Partial { num_signatures: 5 };
+    write_price_verified(&mut w.svm, w.sol_price, SOL_FEED, SOL_PRICE, 10_000_000, NOW - 5, partial);
+    let err = { let i = deposit_ix(&w, &k, 100_000_000, 0, false); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap_err();
+    assert!(err.contains("StalePrice"), "{err}");
+
+    write_price(&mut w.svm, w.sol_price, SOL_FEED, SOL_PRICE, 10_000_000, NOW - 5);
+    { let i = deposit_ix(&w, &k, 101_000_000, 0, false); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap();
 }

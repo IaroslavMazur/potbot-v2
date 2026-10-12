@@ -120,7 +120,8 @@ export async function POST(req: Request) {
       new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
     // `pre` creates the holder's USDC account if needed (idempotent, tiny); it rides in the same
     // transaction unless that would not fit.
-    let exitTx = v0([...pre, open, ...sale, ...pay, close])
+    const hasUsdcAta = !!(await connection.getAccountInfo(userUsdc, 'confirmed'))
+    let exitTx = v0([...(hasUsdcAta ? [] : pre), open, ...sale, ...pay, close])
     const txs: VersionedTransaction[] = []
     if (exitTx.serialize().length > 1232) {
       txs.push(v0(pre))

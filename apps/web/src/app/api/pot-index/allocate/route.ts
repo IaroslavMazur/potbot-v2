@@ -6,7 +6,8 @@ import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruct
 import idl from '@/lib/pot-index/idl.json'
 import registry from '@/lib/pot-index/assets.devnet.json'
 import { buildRebalancePair, CASH_LEG, fetchPot, fetchPotBalances } from '@/lib/pot-index/client'
-import { buildPythSession, fetchHermesPrices } from '@/lib/pot-index/pyth-post'
+import { fetchHermesPrices } from '@/lib/pot-index/pyth-post'
+import { postPricesAs } from '@/lib/pot-index/pyth-server'
 
 /**
  * POST /api/pot-index/allocate  { wallet, mint, depositNetUsdc? }
@@ -40,9 +41,11 @@ export async function POST(req: Request) {
   let mint: PublicKey
   let depositNet = 0
   let clientBlockhash: string | null = null
+  let priceUpdatesIn: PublicKey[] | null = null
   try {
-    const body = (await req.json()) as { wallet?: string; mint?: string; depositNetUsdc?: string | number; blockhash?: string }
+    const body = (await req.json()) as { wallet?: string; mint?: string; depositNetUsdc?: string | number; blockhash?: string; priceUpdates?: string[] }
     wallet = new PublicKey(body.wallet ?? '')
+    priceUpdatesIn = Array.isArray(body.priceUpdates) ? body.priceUpdates.map((k) => new PublicKey(k)) : null
     clientBlockhash = typeof body.blockhash === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(body.blockhash) ? body.blockhash : null
     mint = new PublicKey(body.mint ?? '')
     depositNet = Math.max(0, Number(body.depositNetUsdc ?? 0))
@@ -94,7 +97,17 @@ export async function POST(req: Request) {
     if (plan.length === 0) return NextResponse.json({ ok: true, txs: [], plan: [] })
 
     const program = new Program(idl as Idl, new AnchorProvider(connection, readOnlyWallet(wallet), { commitment: 'confirmed' }))
-    const session = await buildPythSession(connection, readOnlyWallet(wallet), feedIds)
+    // Prices: either already posted by the operator for this deposit (/api/pot-index/prices, one per
+    // feed in `feedIds` order) or posted now by the operator. Either way the holder signs only the
+    // cash-deploy transactions; the operator gets its rent back through /cleanup.
+    let priceUpdates: PublicKey[]
+    let cleanup: string[] = []
+    if (priceUpdatesIn && priceUpdatesIn.length === feedIds.length) priceUpdates = priceUpdatesIn
+    else {
+      const posted = await postPricesAs(connection, mm, feedIds)
+      priceUpdates = posted.priceUpdates
+      cleanup = posted.cleanup
+    }
     // Blockhash from the holder's own RPC when provided (see exit-usdc route), else ours.
     const blockhash = clientBlockhash ?? (await connection.getLatestBlockhash('confirmed')).blockhash
     const userUsdc = getAssociatedTokenAddressSync(usdcMint, wallet)
@@ -110,7 +123,7 @@ export async function POST(req: Request) {
         legOut: CASH_LEG,
         legIn: p.leg,
         amountOut: p.amountOut,
-        priceUpdates: session.priceUpdates,
+        priceUpdates,
       })
       const ixs = [
         createAssociatedTokenAccountIdempotentInstruction(wallet, mmUsdc, mm.publicKey, usdcMint),
@@ -127,14 +140,8 @@ export async function POST(req: Request) {
       middle.push(v)
     }
 
-    const ser = (v: VersionedTransaction) => Buffer.from(v.serialize()).toString('base64')
-    const sign = ({ tx, signers }: { tx: VersionedTransaction; signers: { publicKey: PublicKey; secretKey: Uint8Array }[] }) => {
-      tx.message.recentBlockhash = blockhash // same blockhash as the middle txs, set before signing
-      if (signers.length) tx.sign(signers as never[])
-      return tx
-    }
-    const txs = [...session.postTxs.map((t) => ser(sign(t))), ...middle.map(ser), ...session.closeTxs.map((t) => ser(sign(t)))]
-    return NextResponse.json({ ok: true, txs, plan })
+    const txs = middle.map((v) => Buffer.from(v.serialize()).toString('base64'))
+    return NextResponse.json({ ok: true, txs, plan, cleanup })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }

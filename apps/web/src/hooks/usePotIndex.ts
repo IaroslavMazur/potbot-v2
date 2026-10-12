@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react'
-import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { Wallet } from '@coral-xyz/anchor'
 import { usePrivyAnchorWallet } from '@/hooks/usePrivyAnchorWallet'
 import {
@@ -24,7 +24,7 @@ import {
   type CreatePotArgs,
   type PotView,
 } from '@/lib/pot-index/client'
-import { buildWithPythUpdates, fetchHermesPrices } from '@/lib/pot-index/pyth-post'
+import { fetchHermesPrices } from '@/lib/pot-index/pyth-post'
 import { POT_INDEX_ASSETS, POT_INDEX_SETTINGS, assetByMint } from '@/lib/pot-index/registry'
 
 /** Signer-aware program + wallet (wallet-adapter or Privy). */
@@ -324,8 +324,27 @@ export function usePotIndexActions() {
     async (pot: PotView, amountUsdc: number, referrer: PublicKey | null, minSharesOut = 0, opts: { allocate?: boolean } = {}) => {
       if (!program || !wallet || !pubkey) throw new Error('Connect a wallet first')
       const feeds = pot.legs.map((l) => l.feedId)
-      const txs = await buildWithPythUpdates(connection, wallet, feeds, (priceUpdates) =>
-        buildDeposit(program, {
+      // The operator posts the Pyth prices (and reclaims their rent afterwards), so the holder signs
+      // one deposit transaction plus, with deposit-and-allocate, one small transaction per leg. The
+      // wallet simulates all of them cleanly because the price accounts already exist.
+      const builtAt = Date.now()
+      const pr = await withStage('deposit:prices', fetch('/api/pot-index/prices', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ feedIds: feeds }),
+      }))
+      const prices = (await pr.json()) as { ok?: boolean; feedIds?: string[]; priceUpdates?: string[]; cleanup?: string[]; error?: string }
+      if (!pr.ok || !prices.priceUpdates) throw new Error(prices.error ?? 'prices unavailable')
+      // The route returns feeds de-duplicated and lower-cased, in its own order: map back to the legs.
+      const byFeed = new Map((prices.feedIds ?? []).map((f, i) => [f, new PublicKey(prices.priceUpdates![i])]))
+      const priceUpdates = feeds.map((f) => {
+        const k = byFeed.get(f.toLowerCase())
+        if (!k) throw new Error('price missing for a leg')
+        return k
+      })
+      const cleanup = prices.cleanup ?? []
+      try {
+        const ixs = await buildDeposit(program, {
           pot,
           user: pubkey,
           usdcMint: new PublicKey(POT_INDEX_SETTINGS.usdcMint),
@@ -334,63 +353,55 @@ export function usePotIndexActions() {
           minSharesOut,
           referrer,
           priceUpdates,
-        }),
-      )
-      // One wallet prompt for the whole bundle (post prices → deposit → refund rent): fresh blockhash
-      // on every tx right before signing, sign all at once, then send strictly in order.
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-      const vtxs = txs.map(({ tx }) => {
-        const v = tx as VersionedTransaction
-        v.message.recentBlockhash = blockhash
-        return v
-      })
-      txs.forEach(({ signers }, i) => {
-        if (signers.length) vtxs[i].sign(signers as never[])
-      })
+        })
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+        const depositTx = new VersionedTransaction(new TransactionMessage({ payerKey: pubkey, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
 
-      // Deposit and allocate: buy the basket right after the deposit, in the same prompt. Best effort:
-      // if the planner is unavailable (stale prices, market closed) the deposit still goes through
-      // and keepers allocate later.
-      let allocTxs: VersionedTransaction[] = []
-      let allocated = 0
-      if (opts.allocate !== false) {
-        try {
-          const res = await fetch('/api/pot-index/allocate', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              wallet: pubkey.toBase58(),
-              mint: pot.indexMint.toBase58(),
-              depositNetUsdc: Math.floor(amountUsdc * 1e6 * (1 - ENTRY_FEE_BPS / 10_000)),
-              blockhash,
-            }),
-          })
-          const data = (await res.json()) as { txs?: string[]; plan?: unknown[] }
-          if (res.ok && data.txs?.length) {
-            allocTxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-            allocated = data.plan?.length ?? 0
+        // Deposit and allocate: buy the basket right after the deposit, in the same prompt. Best effort:
+        // if the planner is unavailable (stale prices, market closed) the deposit still goes through
+        // and keepers allocate later.
+        let allocTxs: VersionedTransaction[] = []
+        let allocated = 0
+        if (opts.allocate !== false) {
+          try {
+            const res = await fetch('/api/pot-index/allocate', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                wallet: pubkey.toBase58(),
+                mint: pot.indexMint.toBase58(),
+                depositNetUsdc: Math.floor(amountUsdc * 1e6 * (1 - ENTRY_FEE_BPS / 10_000)),
+                blockhash,
+                priceUpdates: priceUpdates.map((k) => k.toBase58()),
+              }),
+            })
+            const data = (await res.json()) as { txs?: string[]; plan?: unknown[] }
+            if (res.ok && data.txs?.length) {
+              allocTxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
+              allocated = data.plan?.length ?? 0
+            }
+          } catch {
+            /* deposit only */
           }
-        } catch {
-          /* deposit only */
         }
-      }
 
-      const all = [...vtxs, ...allocTxs]
-      const builtAt = Date.now()
-      const signed = wallet.signAllTransactions
-        ? ((await wallet.signAllTransactions(all)) as VersionedTransaction[])
-        : await Promise.all(all.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction))
-      if (!(await bundleStillFresh(connection, signed[0], builtAt))) throw new Error(TOOK_TOO_LONG)
-      const sigs: string[] = []
-      for (let i = 0; i < signed.length; i++) {
-        const v = signed[i]
-        const sig = await connection.sendRawTransaction(v.serialize(), { maxRetries: 5 })
-        if (i < vtxs.length) await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
-        else await connection.confirmTransaction(sig, 'confirmed')
-        sigs.push(sig)
+        const all = [depositTx, ...allocTxs]
+        const signed = await withStage(`deposit:sign(${all.length} txs)`, wallet.signAllTransactions
+          ? (wallet.signAllTransactions(all) as Promise<VersionedTransaction[]>)
+          : Promise.all(all.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction)))
+        if (!(await bundleStillFresh(connection, signed[0], builtAt))) throw new Error(TOOK_TOO_LONG)
+        const sigs: string[] = []
+        for (let i = 0; i < signed.length; i++) {
+          const v = signed[i]
+          const sig = await withStage(`deposit:send ${i + 1}/${signed.length}`, connection.sendRawTransaction(v.serialize(), { maxRetries: 5 }))
+          await withStage(`deposit:confirm ${i + 1}/${signed.length} ${sig}`, connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed'))
+          sigs.push(sig)
+        }
+        await invalidate()
+        return Object.assign(sigs, { allocated })
+      } finally {
+        releasePrices(cleanup)
       }
-      await invalidate()
-      return Object.assign(sigs, { allocated })
     },
     [program, wallet, pubkey, connection],
   )

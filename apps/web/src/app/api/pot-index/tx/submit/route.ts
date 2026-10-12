@@ -17,7 +17,8 @@ export async function POST(req: Request) {
   try {
     assertDevnet()
     const op = operatorKeypair()
-    const b = (await req.json()) as { tx?: string; token?: string }
+    const b = (await req.json()) as { tx?: string; token?: string; timing?: unknown }
+    if (b.timing) console.log('[potfolio submit] timing', JSON.stringify(b.timing))
     const tx = VersionedTransaction.deserialize(Buffer.from(b.tx ?? '', 'base64'))
     const t = verifyToken(op, tx, b.token ?? '')
     const keys = tx.message.staticAccountKeys
@@ -26,8 +27,6 @@ export async function POST(req: Request) {
     if (hi < 0 || tx.signatures[hi].every((x) => x === 0)) return NextResponse.json({ error: 'not signed by the holder' }, { status: 400 })
     const connection = operatorConnection()
     if (t.feedIds.length) await refreshPrices(connection, op, t.feedIds)
-    // Expired before it reached us? Say so plainly instead of a failed send.
-    if ((await connection.getBlockHeight('confirmed')) > t.lastValidBlockHeight) return NextResponse.json({ error: 'That signature took longer than the network allows (about a minute). Nothing changed. Confirm again.' }, { status: 409 })
     const opIndex = keys.findIndex((k) => k.equals(op.publicKey))
     if (opIndex >= 0 && tx.message.isAccountSigner(opIndex)) tx.sign([op])
     const sig = await sendAndConfirm(connection, tx, { blockhash: t.blockhash, lastValidBlockHeight: t.lastValidBlockHeight })
@@ -43,6 +42,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, sig, allocated })
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e)
+    const low = m.toLowerCase()
+    if (low.includes('blockhash not found') || low.includes('block height exceeded') || low.includes('expired'))
+      return NextResponse.json({ error: 'That signature took longer than the network allows (about a minute). Nothing changed. Confirm again.', expired: true }, { status: 409 })
     return NextResponse.json({ error: m }, { status: 500 })
   }
 }

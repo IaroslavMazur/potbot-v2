@@ -26,6 +26,7 @@ import {
 } from '@/lib/pot-index/client'
 import { fetchHermesPrices } from '@/lib/pot-index/pyth-post'
 import { POT_INDEX_ASSETS, POT_INDEX_SETTINGS, assetByMint } from '@/lib/pot-index/registry'
+import { reportClientError } from '@/lib/pot-index/client-log'
 
 /** Signer-aware program + wallet (wallet-adapter or Privy). */
 /** A signed bundle is only good while its blockhash lives (~60 s) and, for anything that posts a
@@ -330,24 +331,37 @@ export function usePotIndexActions() {
   const viaOperator = useCallback(
     async (kind: 'deposit' | 'exit' | 'exit-usdc', body: Record<string, unknown>) => {
       if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      const br = await withStage(`${kind}:build`, fetch('/api/pot-index/tx/prepare', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind, wallet: pubkey.toBase58(), ...body }),
-      }))
-      const built = (await br.json()) as { ok?: boolean; tx?: string; token?: string; error?: string; payUsdc?: string }
-      if (!br.ok || !built.tx || !built.token) throw new Error(built.error ?? 'could not build the transaction')
-      const tx = VersionedTransaction.deserialize(Buffer.from(built.tx, 'base64'))
-      const signed = (await withStage(`${kind}:sign`, wallet.signTransaction(tx))) as VersionedTransaction
-      const sr = await withStage(`${kind}:submit`, fetch('/api/pot-index/tx/submit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tx: Buffer.from(signed.serialize()).toString('base64'), token: built.token }),
-      }))
-      const res = (await sr.json()) as { ok?: boolean; sig?: string; allocated?: string[]; error?: string }
-      if (!sr.ok || !res.sig) throw new Error(res.error ?? 'the transaction was not accepted')
-      await invalidate()
-      return res
+      // Two attempts: if the wallet prompt outlived the blockhash, rebuild once and ask again.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const t0 = Date.now()
+        const br = await withStage(`${kind}:build`, fetch('/api/pot-index/tx/prepare', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ kind, wallet: pubkey.toBase58(), ...body }),
+        }))
+        const built = (await br.json()) as { ok?: boolean; tx?: string; token?: string; error?: string; payUsdc?: string }
+        if (!br.ok || !built.tx || !built.token) throw new Error(built.error ?? 'could not build the transaction')
+        const tx = VersionedTransaction.deserialize(Buffer.from(built.tx, 'base64'))
+        const t1 = Date.now()
+        const signed = (await withStage(`${kind}:sign`, wallet.signTransaction(tx))) as VersionedTransaction
+        const t2 = Date.now()
+        const sr = await withStage(`${kind}:submit`, fetch('/api/pot-index/tx/submit', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tx: Buffer.from(signed.serialize()).toString('base64'), token: built.token, timing: { prepareMs: t1 - t0, walletMs: t2 - t1, attempt } }),
+        }))
+        const res = (await sr.json()) as { ok?: boolean; sig?: string; allocated?: string[]; error?: string; expired?: boolean }
+        if (sr.ok && res.sig) {
+          await invalidate()
+          return res
+        }
+        if (res.expired && attempt === 0) {
+          reportClientError(`${kind}:expired`, new Error(`wallet took ${((t2 - t1) / 1000).toFixed(0)} s`), { prepareMs: t1 - t0, walletMs: t2 - t1 })
+          continue
+        }
+        throw new Error(res.error ?? 'the transaction was not accepted')
+      }
+      throw new Error('That signature took longer than the network allows. Nothing changed.')
     },
     [wallet, pubkey],
   )

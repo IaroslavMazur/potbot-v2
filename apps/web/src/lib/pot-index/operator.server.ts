@@ -200,7 +200,8 @@ export async function hoistAtaCreations(connection: Connection, op: Keypair, ixs
  * transaction simulates in a second, which leaves the holder the whole blockhash window to sign.
  */
 export async function buildHolderTx(connection: Connection, _op: Keypair, wallet: PublicKey, ixs: TransactionInstruction[]) {
-  const bh = await connection.getLatestBlockhash('finalized')
+  // 'confirmed': the full ~60 s window. The operator sends through the same RPC that issued it.
+  const bh = await connection.getLatestBlockhash('confirmed')
   const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: bh.blockhash, instructions: ixs }).compileToV0Message())
   return { tx, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight }
 }

@@ -21,5 +21,8 @@ A keeper is any bot that moves a Pot toward its target weights. The program, not
 
 Program v2 changes this: (1) the cash deploy happens in the same transaction as the deposit, so there is nothing for a bot to front-run; (2) asset→asset rotations become a Dutch auction: allowed slippage starts at 0 when drift crosses the deadband and grows per slot, so keepers compete the band down to the real cost of the swap; (3) the deadband becomes a per-Pot parameter with a wider default. Exit is never gated by any of this.
 
+## Prices (Oct 12)
+Pyth is a pull oracle. Since Oct 12 the holder never posts prices: the operator keeps one persistent price-update account per listed feed (write authority = operator) and refreshes them right before it submits a holder's transaction. Next step: the keeper refreshes them on a schedule (every ~20 s) so deposits, exits and rebalances all read accounts that are always fresh, and the per-request refresh disappears. On mainnet Pyth sponsors the same thing for major feeds.
+
 ## Mainnet keeper
 Same instruction pair; the swap step becomes a Jupiter route. Anyone can run one. Partner rebalancing engines (for example DiversiFi) can fill the same instruction.

@@ -16,6 +16,7 @@ import { estimateShares, EXIT_FEE_BPS, ENTRY_FEE_BPS, MIN_DEPOSIT_USDC } from '@
 import { assetByMint, explorerAddress, explorerTx, POT_INDEX_SETTINGS } from '@/lib/pot-index/registry'
 import { CompositionBar } from '@/components/pot-index/CompositionBar'
 import { ActivityFeed } from '@/components/pot-index/ActivityFeed'
+import { reportClientError } from '@/lib/pot-index/client-log'
 import { friendlyError } from '@/lib/pot-index/errors'
 import { DevnetFaucet } from '@/components/pot-index/DevnetFaucet'
 import { NavChart } from '@/components/pot-index/NavChart'
@@ -110,6 +111,7 @@ export default function PotPage() {
       const sig = Array.isArray(r) ? r[r.length - 1] : r
       setMsg({ ok: true, text: typeof okText === 'function' ? okText(r) : okText, sig })
     } catch (e) {
+      reportClientError('pot-page', e, { pot: mint, wallet: pubkey?.toBase58() })
       setMsg({ ok: false, text: friendlyError(e, { devnet: POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' }) })
     } finally {
       setBusy(false)

@@ -35,6 +35,13 @@ const BUNDLE_MAX_AGE_MS = 40_000
 async function bundleStillFresh(_connection: Connection, _first: VersionedTransaction, builtAt: number): Promise<boolean> {
   return Date.now() - builtAt <= BUNDLE_MAX_AGE_MS
 }
+function withStage<T>(stage: string, p: Promise<T>): Promise<T> {
+  return p.catch((e: unknown) => {
+    const err = (e instanceof Error ? e : new Error(String(e))) as Error & { stage?: string }
+    if (!err.stage) err.stage = stage
+    throw err
+  })
+}
 const TOOK_TOO_LONG = 'The wallet prompt took longer than a minute, so the prices in this bundle expired. Nothing changed. Confirm again, within a minute this time.'
 
 export function usePotIndexProgram() {
@@ -402,26 +409,27 @@ export function usePotIndexActions() {
       // Two attempts: if the wallet prompt took too long, rebuild with fresh prices and ask again.
       for (let attempt = 0; attempt < 2 && !signed; attempt++) {
         const builtAt = Date.now()
-        const res = await fetch('/api/pot-index/exit-usdc', {
+        const res = await withStage('exit-usdc:build', fetch('/api/pot-index/exit-usdc', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares) }),
-        })
+        }))
         const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string }
         if (!res.ok || !data.txs) throw new Error(data.error ?? 'market maker unavailable')
         const vtxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-        const s = wallet.signAllTransactions
-          ? ((await wallet.signAllTransactions(vtxs)) as VersionedTransaction[])
-          : await Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction))
+        const s = await withStage(`exit-usdc:sign(${vtxs.length} txs, attempt ${attempt + 1})`, wallet.signAllTransactions
+          ? (wallet.signAllTransactions(vtxs) as Promise<VersionedTransaction[]>)
+          : Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction)))
         if (await bundleStillFresh(connection, s[0], builtAt)) signed = s
         else if (attempt === 1) throw new Error(TOOK_TOO_LONG)
       }
       if (!signed) throw new Error(TOOK_TOO_LONG)
       const sigs: string[] = []
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-      for (const v of signed) {
-        const sig = await connection.sendRawTransaction(v.serialize(), { maxRetries: 5 })
-        await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+      for (let i = 0; i < signed.length; i++) {
+        const v = signed[i]
+        const sig = await withStage(`exit-usdc:send ${i + 1}/${signed.length}`, connection.sendRawTransaction(v.serialize(), { maxRetries: 5 }))
+        await withStage(`exit-usdc:confirm ${i + 1}/${signed.length} ${sig}`, connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed'))
         sigs.push(sig)
       }
       await invalidate()

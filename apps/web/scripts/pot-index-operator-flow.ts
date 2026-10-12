@@ -33,7 +33,7 @@ async function main() {
   const body = cmd === 'deposit' ? { kind: 'deposit', wallet, mint, amountUsdc: Number(amt) } : cmd === 'exit' ? { kind: 'exit', wallet, mint, shares: Number(amt) } : cmd === 'exit-usdc' ? { kind: 'exit-usdc', wallet, mint, shares: amt } : null
   if (!body) throw new Error('unknown command')
   let t = Date.now()
-  const built = await post('tx/build', body)
+  const built = await post('tx/prepare', body)
   console.log(`build ${Date.now() - t} ms`, built.payUsdc ? `pay ${Number(built.payUsdc) / 1e6} USDC` : '')
   const tx = VersionedTransaction.deserialize(Buffer.from(built.tx as string, 'base64'))
   tx.sign([kp])

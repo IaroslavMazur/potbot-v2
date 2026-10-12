@@ -330,7 +330,7 @@ export function usePotIndexActions() {
   const viaOperator = useCallback(
     async (kind: 'deposit' | 'exit' | 'exit-usdc', body: Record<string, unknown>) => {
       if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      const br = await withStage(`${kind}:build`, fetch('/api/pot-index/tx/build', {
+      const br = await withStage(`${kind}:build`, fetch('/api/pot-index/tx/prepare', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ kind, wallet: pubkey.toBase58(), ...body }),

@@ -200,8 +200,8 @@ export default function PotPage() {
 
           <div className="card p-5">
             <h2 className="mb-3 font-semibold text-white">Composition</h2>
-            <CompositionBar pot={p} actualUsd={stats.data?.legsUsd} cashUsd={stats.data ? stats.data.cash / 1e6 : undefined} />
-            <p className="mt-3 text-xs text-white/50">Target weights. Hover a weight for the live one.</p>
+            <CompositionBar pot={p} actualUsd={stats.data?.legsUsd} cashUsd={stats.data ? stats.data.cash / 1e6 : undefined} legAmounts={stats.data?.legs} />
+            <p className="mt-3 text-xs text-white/50">Target weights. Hover a weight for what is in the Pot right now. New deposits arrive as USDC and keepers buy them into the basket; redemptions take every asset out pro rata.</p>
           </div>
 
           <details className="card p-5 text-sm text-white/70">

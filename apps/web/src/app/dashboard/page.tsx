@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo } from 'react'
+import toast from 'react-hot-toast'
 import { useQuery } from '@tanstack/react-query'
 import { getAssociatedTokenAddressSync } from '@solana/spl-token'
 import { PageHeader } from '@/components/PageHeader'
@@ -137,6 +138,23 @@ export default function DashboardPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/portfolios" className="btn-secondary">Browse POTFolios</Link>
               <Link href="/portfolios/new" className="btn-primary">Create your own</Link>
+            </div>
+          </section>
+
+          <section className="card mb-6 p-5">
+            <h2 className="font-semibold text-white">Invite and earn</h2>
+            <p className="mt-1 text-sm text-white/70">Deposits made through your link pay you {CREATOR_SHARE * 100}% of the {ENTRY_FEE_BPS / 100}% entry fee, on-chain, in the same transaction. One link per POTFolio.</p>
+            <div className="mt-3 space-y-2">
+              {(rows.length ? rows.map((r) => r.pot) : (pots.data ?? []).slice(0, 3)).map((p) => {
+                const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://potbot.fun'}/portfolios/${p.indexMint.toBase58()}?ref=${me}`
+                return (
+                  <div key={p.address.toBase58()} className="flex items-center gap-2">
+                    <span className="w-24 shrink-0 truncate text-sm text-white">${p.symbol}</span>
+                    <input readOnly value={link} className="input flex-1 truncate text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <button type="button" className="btn-secondary shrink-0" onClick={() => { void navigator.clipboard.writeText(link); toast.success(`Link for $${p.symbol} copied`) }}>Copy</button>
+                  </div>
+                )
+              })}
             </div>
           </section>
 

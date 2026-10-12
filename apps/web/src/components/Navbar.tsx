@@ -69,11 +69,12 @@ function LivePriceTicker() {
 // translator can swap "Vaults" → "POTs" etc. in light mode.
 // Home ⇄ Vaults is handled by the pill toggle below. Leaderboard now lives
 // as a tab inside /pots. FAQ lives in the footer only.
-const NAV_LINKS: { href: string; emoji: string; term: string }[] = [
-  { href: '/portfolios',  emoji: '',     term: 'POTfolios' },
+const NAV_LINKS: { href: string; emoji: string; term: string; hot?: boolean }[] = [
+  { href: '/portfolios',  emoji: '',     term: 'POTFolios' },
   { href: '/portfolios/new', emoji: '+', term: 'Create' },
   { href: '/learn',       emoji: '',     term: 'Learn' },
   { href: '/roadmap',     emoji: '',     term: 'Roadmap' },
+  { href: '/worldsfair',  emoji: '',     term: "World's Fair", hot: true },
 ]
 
 export function Navbar() {
@@ -105,8 +106,8 @@ export function Navbar() {
         <div className="hidden sm:flex items-center gap-1 text-sm font-medium">
           {NAV_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className={`px-3 py-1.5 rounded-lg transition ${
-              isActive(link.href) ? 'text-white bg-pot-card border border-pot-border' : 'text-gray-400 hover:text-white hover:bg-pot-card/50'
-            }`}>{navLabel(link)}</Link>
+              isActive(link.href) ? 'text-white bg-pot-card border border-pot-border' : link.hot ? 'text-pot-green hover:bg-pot-green/10 ring-1 ring-pot-green/40 shadow-[0_0_14px_rgba(20,241,149,0.25)]' : 'text-gray-400 hover:text-white hover:bg-pot-card/50'
+            }`}>{link.hot && <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-pot-green align-middle" />}{navLabel(link)}</Link>
           ))}
         </div>
 

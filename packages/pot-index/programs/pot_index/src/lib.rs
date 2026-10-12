@@ -64,6 +64,11 @@ pub mod pot_index {
         instructions::pot::handle_set_index_metadata(ctx, uri)
     }
 
+    /// Creator-only: repoint the index token's metadata URI (logo, description, thesis).
+    pub fn update_index_metadata(ctx: Context<UpdateIndexMetadata>, uri: String) -> Result<()> {
+        instructions::pot::handle_update_index_metadata(ctx, uri)
+    }
+
     // ---- users
     pub fn deposit<'info>(
         ctx: Context<'info, Deposit<'info>>,

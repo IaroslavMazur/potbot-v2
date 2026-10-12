@@ -149,15 +149,14 @@ pub fn handle_exit_usdc_open<'info>(
         let vault_info = &ctx.remaining_accounts[i * 4];
         let user_info = &ctx.remaining_accounts[i * 4 + 2];
         let mint_info = &ctx.remaining_accounts[i * 4 + 3];
-        let user_ata = Account::<TokenAccount>::try_from(user_info)?;
-        require_keys_eq!(user_ata.mint, leg.mint, PotError::TokenMintMismatch);
-        require_keys_eq!(user_ata.owner, user_key, PotError::TokenOwnerMismatch);
-        require_keys_eq!(mint_info.key(), leg.mint, PotError::TokenMintMismatch);
-
         let out = oracle::exit_amount(legs[i].amount, shares, supply)?;
         if out == 0 {
             continue;
         }
+        let user_ata = Account::<TokenAccount>::try_from(user_info)?;
+        require_keys_eq!(user_ata.mint, leg.mint, PotError::TokenMintMismatch);
+        require_keys_eq!(user_ata.owner, user_key, PotError::TokenOwnerMismatch);
+        require_keys_eq!(mint_info.key(), leg.mint, PotError::TokenMintMismatch);
         legs_value = legs_value
             .checked_add(oracle::token_value_usd(out, leg.decimals, legs[i].price_lo, legs[i].expo)?)
             .ok_or(PotError::MathOverflow)?;

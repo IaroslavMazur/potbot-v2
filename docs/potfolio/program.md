@@ -43,7 +43,7 @@ Anchor 1.2.1, Solana CLI 4.3. Source: `packages/pot-index/programs/pot_index/src
 Common ones in the UI: `StalePrice` (stock feeds stop on weekends: deposits wait, exits work), `DepositTooSmall` (< 1 USDC), `SlippageShares` (price moved between quote and execution; retry).
 
 ## Events
-`Deposited`, `Exited`, `ExitUsdcOpened`, `ExitUsdcClosed`, `RebalanceOpened`, `RebalanceClosed` (camelCase in the Anchor event parser). The activity feed on each POTfolio page reads them.
+`Deposited`, `Exited`, `ExitUsdcOpened`, `ExitUsdcClosed`, `RebalanceOpened`, `RebalanceClosed` (camelCase in the Anchor event parser). The activity feed on each POTFolio page reads them.
 
 ## Security notes
 

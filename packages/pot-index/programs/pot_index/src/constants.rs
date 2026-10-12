@@ -54,8 +54,11 @@ pub const EXIT_LEG: u8 = u8::MAX - 1;
 /// Conversion fee on the USDC produced by an exit-to-USDC sale, paid to the protocol treasury.
 pub const CONVERSION_FEE_BPS: u64 = 10; // 0.10%
 
-/// Hard upper bound on the oracle age any config may allow (pull oracle: clients post fresh updates).
-pub const MAX_PRICE_AGE_SECS_LIMIT: u64 = 300;
+/// Hard upper bound on the oracle age any config may allow. Pyth is a pull oracle: any historical
+/// signed update can be posted at any time, so this window is exactly how far back a depositor can
+/// shop for a favourable tick. 60 s keeps that smaller than the entry + exit fee hurdle; the live
+/// config uses 30 s. (Review F1, Oct 11 2026.)
+pub const MAX_PRICE_AGE_SECS_LIMIT: u64 = 60;
 
 /// Minimum deposit so fees can never round to zero: 1 USDC.
 pub const MIN_DEPOSIT: u64 = 1_000_000;

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import SignupForm from '@/components/SignupForm'
 
 export const metadata = {
-  title: 'Early Access — PotBot',
+  title: 'Early access',
   description:
     'Sign up for PotBot mainnet early access. Founding members get lower fees, NFT badge, and priority on Strategy Vaults.',
 }

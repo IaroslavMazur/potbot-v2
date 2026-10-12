@@ -5,7 +5,7 @@ import { fetchAllPots, fetchPot, fetchPotBalances, navUsd, type PotView } from '
 import { fetchHermesPrices } from '@/lib/pot-index/pyth-post'
 
 /**
- * POTfolio NAV history in Supabase (`potfolio_nav`). Every value is computed here from the chain
+ * POTFolio NAV history in Supabase (`potfolio_nav`). Every value is computed here from the chain
  * and Hermes; callers only name a mint. Snapshots are taken at most once per MIN_GAP per Pot, so
  * both the cron and page opens can call `recordNav` freely.
  */

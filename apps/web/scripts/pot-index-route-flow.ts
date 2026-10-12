@@ -2,7 +2,7 @@
  * Drive the web app's server routes with a keypair wallet, exactly as the browser does:
  *
  *   npx tsx scripts/pot-index-route-flow.ts allocate  <mint> [--base <url>]
- *   npx tsx scripts/pot-index-route-flow.ts exit-usdc <mint> <shares> [--base <url>]
+ *   npx tsx scripts/pot-index-route-flow.ts exit-usdc <mint> <shares in base units, 6 decimals: 30 SBC = 30000000> [--base <url>]
  *   npx tsx scripts/pot-index-route-flow.ts faucet [--base <url>]
  *
  * Wallet: $POT_INDEX_WALLET_KEYPAIR (default ~/.config/solana/id.json).
@@ -43,7 +43,8 @@ async function main() {
 
   const mint = pos[1]
   if (!mint) throw new Error('mint required')
-  const body = cmd === 'allocate' ? { wallet, mint } : cmd === 'exit-usdc' ? { wallet, mint, shares: pos[2] } : null
+  const { blockhash } = await connection.getLatestBlockhash('finalized') // like the browser: the sender's own blockhash
+  const body = cmd === 'allocate' ? { wallet, mint, blockhash } : cmd === 'exit-usdc' ? { wallet, mint, shares: pos[2], blockhash } : null
   if (!body) throw new Error('unknown command')
   const res = await post(cmd, body)
   const txs = (res.txs as string[]).map((b) => VersionedTransaction.deserialize(Buffer.from(b, 'base64')))
@@ -53,6 +54,11 @@ async function main() {
     const sig = await connection.sendRawTransaction(tx.serialize(), { maxRetries: 5 })
     await connection.confirmTransaction(sig, 'confirmed')
     console.log('tx', `https://explorer.solana.com/tx/${sig}?cluster=devnet`)
+  }
+  const cleanup = (res.cleanup as string[] | undefined) ?? []
+  if (cleanup.length) {
+    const c = await post('cleanup', { accounts: cleanup })
+    console.log('cleanup', (c.sigs as string[] | undefined)?.length ?? 0, 'txs')
   }
 }
 

@@ -534,13 +534,13 @@ export default function LandingPage() {
               href="/portfolios/new"
               className="btn-primary text-base px-6 py-3 glow-green flex items-center gap-2"
             >
-              Create a POTfolio
+              Create a POTFolio
             </Link>
             <Link
               href="/portfolios"
               className="btn-secondary text-base px-6 py-3 flex items-center gap-2"
             >
-              Explore POTfolios
+              Explore POTFolios
             </Link>
           </div>
 
@@ -751,7 +751,7 @@ export default function LandingPage() {
               href="/portfolios/new"
               className="px-7 py-4 rounded-xl bg-pot-card/80 border border-pot-accent/40 hover:border-pot-accent text-white font-bold transition text-base"
             >
-              Create a POTfolio
+              Create a POTFolio
             </Link>
             <a
               href="https://github.com/YD811/potbot-v2"

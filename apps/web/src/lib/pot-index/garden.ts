@@ -2,7 +2,7 @@ import { assetByMint } from './registry'
 import type { PotView } from './client'
 
 /**
- * Garden mode: every POTfolio is a plant. Its level is a pure function of the
+ * Garden mode: every POTFolio is a plant. Its level is a pure function of the
  * value held in the Pot (supply × NAV), so it can be read from chain and never faked.
  */
 export type PlantSeries = 'pink' | 'purple' | 'blue' | 'coral'

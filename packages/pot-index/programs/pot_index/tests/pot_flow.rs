@@ -168,7 +168,7 @@ fn setup() -> World {
     send(
         &mut svm,
         &[ix(
-            pot_index::instruction::InitConfig { treasury, max_price_age_secs: 300 },
+            pot_index::instruction::InitConfig { treasury, max_price_age_secs: 30 },
             pot_index::accounts::InitConfig { admin: admin.pubkey(), config, usdc_mint: usdc, system_program: SYSTEM },
             vec![],
         )],
@@ -653,7 +653,7 @@ fn weights_must_sum_and_config_is_admin_only() {
     let too_old = ix(
         pot_index::instruction::SetConfig {
             update: pot_index::instructions::admin::ConfigUpdate {
-                paused: None, max_price_age_secs: Some(3601), treasury: None, new_admin: None,
+                paused: None, max_price_age_secs: Some(61), treasury: None, new_admin: None,
             },
         },
         pot_index::accounts::AdminOnly { admin: w.admin.pubkey(), config: w.config },
@@ -890,4 +890,154 @@ fn referral_paths_are_exact_and_safe() {
     let bad = set_ata(&mut w.svm, &jup, &referrer, 0);
     let err = dep(&mut w, 1_000_000_000, Some(bad)).unwrap_err();
     assert!(err.contains("ConstraintTokenMint") || err.contains("2014"), "{err}");
+}
+
+// ---------------------------------------------------------------------------
+// Review findings, Oct 11 2026 (independent audit): each one pinned by a test.
+// ---------------------------------------------------------------------------
+
+/// F1: Pyth is a pull oracle. An old-but-favourable tick posted *now* (fresh posted_slot, old
+/// publish_time) must be refused once it is older than max_price_age_secs, even though the
+/// posted_slot check passes.
+#[test]
+fn tick_shopping_is_bounded_by_price_age() {
+    let mut w = setup();
+    let k = create_pot(&mut w, (5000, 5000), 1000);
+    let c = w.creator.insecure_clone();
+    finalize(&mut w, &k, &c).unwrap();
+    let user = w.user.pubkey();
+    set_ata(&mut w.svm, &w.usdc, &user, 1_000_000_000);
+    set_ata(&mut w.svm, &k.index_mint, &user, 0);
+    set_ata(&mut w.svm, &w.usdc, &w.creator.pubkey(), 0);
+    set_ata(&mut w.svm, &w.usdc, &w.treasury, 0);
+
+    // A SOL price 10% lower than now, published 45 s ago, posted in the current slot.
+    write_price(&mut w.svm, w.sol_price, SOL_FEED, SOL_PRICE * 9 / 10, 10_000_000, NOW - 45);
+    let err = { let i = deposit_ix(&w, &k, 100_000_000, 0, false); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap_err();
+    assert!(err.contains("StalePrice"), "{err}");
+
+    // Inside the window it is accepted (the window is the only shopping room there is: 30 s).
+    write_price(&mut w.svm, w.sol_price, SOL_FEED, SOL_PRICE, 10_000_000, NOW - 20);
+    { let i = deposit_ix(&w, &k, 101_000_000, 0, false); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap();
+
+    // And no admin can widen the window past the compiled cap.
+    let widen = ix(
+        pot_index::instruction::SetConfig {
+            update: pot_index::instructions::admin::ConfigUpdate {
+                paused: None, max_price_age_secs: Some(300), treasury: None, new_admin: None,
+            },
+        },
+        pot_index::accounts::AdminOnly { admin: w.admin.pubkey(), config: w.config },
+        vec![],
+    );
+    let err = send(&mut w.svm, &[widen], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("PriceAgeTooLong"), "{err}");
+}
+
+/// F5: the cash currency cannot be registered as an asset.
+#[test]
+fn usdc_cannot_be_a_leg() {
+    let mut w = setup();
+    let usdc = w.usdc;
+    let i = ix(
+        pot_index::instruction::RegisterAsset { feed_id: SOL_FEED },
+        pot_index::accounts::RegisterAsset {
+            admin: w.admin.pubkey(),
+            config: w.config,
+            mint: usdc,
+            asset: pda(&[ASSET_SEED, usdc.as_ref()]),
+            system_program: SYSTEM,
+        },
+        vec![],
+    );
+    let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("InvalidLeg"), "{err}");
+}
+
+/// F7: a holder whose cash was never deployed has empty legs; exit must succeed even when the
+/// leg ATAs do not exist, paying the USDC share only.
+#[test]
+fn exit_pays_cash_without_leg_atas() {
+    let mut w = setup();
+    let k = create_pot(&mut w, (5000, 5000), 1000);
+    let c = w.creator.insecure_clone();
+    finalize(&mut w, &k, &c).unwrap();
+    let user = w.user.pubkey();
+    set_ata(&mut w.svm, &w.usdc, &user, 1_000_000_000);
+    set_ata(&mut w.svm, &k.index_mint, &user, 0);
+    set_ata(&mut w.svm, &w.usdc, &w.creator.pubkey(), 0);
+    set_ata(&mut w.svm, &w.usdc, &w.treasury, 0);
+    // No SOL / JUP ATAs for the user on purpose.
+    { let i = deposit_ix(&w, &k, 100_000_000, 0, false); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap();
+    let shares = token_amount(&w.svm, &ata(&user, &k.index_mint));
+    let usdc_before = token_amount(&w.svm, &ata(&user, &w.usdc));
+    { let i = exit_ix(&w, &k, shares); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap();
+    let usdc_after = token_amount(&w.svm, &ata(&user, &w.usdc));
+    // 100 deposited, 0.30% entry fee, 0.50% exit fee stays in the Pot.
+    assert_eq!(usdc_after - usdc_before, 99_700_000 * 9950 / 10_000);
+    assert_eq!(token_amount(&w.svm, &ata(&user, &k.index_mint)), 0);
+}
+
+/// F10: account substitution. A vault of the right mint but not the Pot's is refused on deposit;
+/// a user ATA owned by someone else is refused on exit.
+#[test]
+fn substituted_accounts_are_refused() {
+    let mut w = setup();
+    let k = create_pot(&mut w, (5000, 5000), 1000);
+    let c = w.creator.insecure_clone();
+    finalize(&mut w, &k, &c).unwrap();
+    let user = w.user.pubkey();
+    set_ata(&mut w.svm, &w.usdc, &user, 1_000_000_000);
+    set_ata(&mut w.svm, &k.index_mint, &user, 0);
+    set_ata(&mut w.svm, &w.sol, &user, 0);
+    set_ata(&mut w.svm, &w.jup, &user, 0);
+    set_ata(&mut w.svm, &w.usdc, &w.creator.pubkey(), 0);
+    set_ata(&mut w.svm, &w.usdc, &w.treasury, 0);
+
+    // Deposit with a foreign SOL vault (same mint, owned by the keeper) in remaining accounts.
+    let foreign = set_ata(&mut w.svm, &w.sol, &w.keeper.pubkey(), 1_000_000_000);
+    let mut d = deposit_ix(&w, &k, 100_000_000, 0, false);
+    let n = d.accounts.len();
+    d.accounts[n - 4] = AccountMeta::new_readonly(foreign, false);
+    let err = send(&mut w.svm, &[d], &w.user, &[]).unwrap_err();
+    assert!(err.contains("VaultMismatch"), "{err}");
+
+    // Honest deposit, then exit with a SOL ATA that belongs to the keeper.
+    { let i = deposit_ix(&w, &k, 100_000_000, 0, false); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap();
+    // Give the Pot some SOL so the SOL leg pays out and the ATA is actually checked.
+    let sol_in = set_ata(&mut w.svm, &w.sol, &k.pot, 0);
+    assert_eq!(sol_in, k.sol_vault);
+    set_ata(&mut w.svm, &w.sol, &k.pot, 1_000_000_000);
+    let shares = token_amount(&w.svm, &ata(&user, &k.index_mint));
+    let mut e = exit_ix(&w, &k, shares);
+    let n = e.accounts.len();
+    e.accounts[n - 5] = AccountMeta::new(foreign, false);
+    let err = send(&mut w.svm, &[e], &w.user, &[]).unwrap_err();
+    assert!(err.contains("TokenOwnerMismatch"), "{err}");
+}
+
+/// F10: privileged instructions refuse the wrong signer.
+#[test]
+fn creator_and_admin_instructions_are_gated() {
+    let mut w = setup();
+    let k = create_pot(&mut w, (5000, 5000), 1000);
+    // finalize by the user, not the creator
+    let u = w.user.insecure_clone();
+    let err = finalize(&mut w, &k, &u).unwrap_err();
+    assert!(err.contains("Unauthorized") || err.contains("ConstraintHasOne"), "{err}");
+    // register_asset by the creator, not the admin
+    let other = set_mint(&mut w.svm, 9);
+    let i = ix(
+        pot_index::instruction::RegisterAsset { feed_id: SOL_FEED },
+        pot_index::accounts::RegisterAsset {
+            admin: w.creator.pubkey(),
+            config: w.config,
+            mint: other,
+            asset: pda(&[ASSET_SEED, other.as_ref()]),
+            system_program: SYSTEM,
+        },
+        vec![],
+    );
+    let err = send(&mut w.svm, &[i], &w.creator, &[]).unwrap_err();
+    assert!(err.contains("Unauthorized") || err.contains("ConstraintHasOne"), "{err}");
 }

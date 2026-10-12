@@ -6,15 +6,15 @@ import { STAGES } from '@/lib/pot-index/garden'
 import { PageHeader } from '@/components/PageHeader'
 
 export const metadata: Metadata = {
-  title: 'Learn: what is a POTfolio? | PotBot',
+  title: 'Learn: what is a POTFolio?',
   description:
-    'POTfolios, Vaults and the Bot, explained in plain words: how the index token is minted and burned, who can and cannot touch the assets, fees, keepers and Garden mode.',
+    'POTFolios, Vaults and the Bot, explained in plain words: how the index token is minted and burned, who can and cannot touch the assets, fees, keepers and Garden mode.',
 }
 
 const FAQ: { q: string; a: string }[] = [
   {
-    q: 'Is a POTfolio a fund?',
-    a: 'No. Nobody manages your money. The basket and its weights are fixed when the POTfolio is created and written on-chain. The program mints and burns the token; keepers only move the basket toward those weights inside limits the program enforces.',
+    q: 'Is a POTFolio a fund?',
+    a: 'No. Nobody manages your money. The basket and its weights are fixed when the POTFolio is created and written on-chain. The program mints and burns the token; keepers only move the basket toward those weights inside limits the program enforces.',
   },
   {
     q: 'Who holds the assets?',
@@ -26,7 +26,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Can the creator change the basket?',
-    a: 'Not in the current version. The creator can pause new deposits or set a maximum size, nothing else. Managed POTfolios (creator adjusts inside a public mandate with a timelock) and Community POTfolios (holders vote with the token) come after the Fair.',
+    a: 'Not in the current version. The creator can pause new deposits or set a maximum size, nothing else. Managed POTFolios (creator adjusts inside a public mandate with a timelock) and Community POTFolios (holders vote with the token) come after the Fair.',
   },
   {
     q: 'Why USDC in, and why a minimum of 1 USDC?',
@@ -34,7 +34,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Where do prices come from?',
-    a: 'Pyth. Prices are posted in the same transaction as the deposit, must be fresh (max 5 minutes old) and are priced conservatively at price plus or minus confidence. Stale prices are refused, which is why stock POTfolios only take deposits while US markets are open. Exits need no oracle and always work.',
+    a: 'Pyth. Prices are posted in the same transaction as the deposit, must be fresh (max 5 minutes old) and are priced conservatively at price plus or minus confidence. Stale prices are refused, which is why stock POTFolios only take deposits while US markets are open. Exits need no oracle and always work.',
   },
   {
     q: 'What is a keeper?',
@@ -42,11 +42,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'How do referrals pay?',
-    a: 'Share your link to a POTfolio. Every deposit through it pays you 0.12% of the amount, instantly, in the same transaction, to your USDC account. No claim step. Without a referrer that share goes to the creator.',
+    a: 'Share your link to a POTFolio. Every deposit through it pays you 0.12% of the amount, instantly, in the same transaction, to your USDC account. No claim step. Without a referrer that share goes to the creator.',
   },
   {
     q: 'What is a Vault then?',
-    a: 'The previous PotBot product (v2): a group treasury where members deposit, propose trades and vote, and the program executes what the vote approved. Vaults have members and governance; POTfolios have holders and a token. Both live on PotBot, both are non-custodial.',
+    a: 'The previous PotBot product (v2): a group treasury where members deposit, propose trades and vote, and the program executes what the vote approved. Vaults have members and governance; POTFolios have holders and a token. Both live on PotBot, both are non-custodial.',
   },
   {
     q: 'What is the Bot?',
@@ -59,7 +59,7 @@ export default function LearnPage() {
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <PageHeader
         eyebrow="Learn"
-        title="What is a POTfolio?"
+        title="What is a POTFolio?"
         lede="A basket of Solana assets issued as one liquid token. Create a portfolio, hold the token. Deposit USDC to mint it at the current value of the basket, redeem it any time for every asset inside or for USDC. No one can withdraw."
       />
 
@@ -82,7 +82,7 @@ export default function LearnPage() {
             cannot send assets to anyone. Not the creator, not PotBot, not an admin.
           </li>
           <li>
-            <b className="text-white">Token metadata.</b> Each POTfolio token has a name, symbol and logo set by the program (Metaplex),
+            <b className="text-white">Token metadata.</b> Each POTFolio token has a name, symbol and logo set by the program (Metaplex),
             so it shows up properly in wallets and explorers.
           </li>
         </ul>
@@ -103,7 +103,7 @@ export default function LearnPage() {
 
       <Section title="Garden mode">
         <p>
-          Every POTfolio is a plant. Its level is a function of the value held in the Pot, read from on-chain supply and price, so it
+          Every POTFolio is a plant. Its level is a function of the value held in the Pot, read from on-chain supply and price, so it
           cannot be faked. Deposits water it, exits dry it out.
         </p>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -117,13 +117,13 @@ export default function LearnPage() {
         </div>
       </Section>
 
-      <Section title="POTfolio vs Vault">
+      <Section title="POTFolio vs Vault">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-white/70">
                 <th className="py-2 pr-4"></th>
-                <th className="py-2 pr-4">POTfolio (v3)</th>
+                <th className="py-2 pr-4">POTFolio (v3)</th>
                 <th className="py-2">Vault (v2)</th>
               </tr>
             </thead>
@@ -151,8 +151,8 @@ export default function LearnPage() {
 
       <Section title="Ready?">
         <div className="flex flex-wrap gap-3">
-          <Link href="/portfolios" className="btn-primary">See live POTfolios</Link>
-          <Link href="/portfolios/new" className="btn-secondary">Create a POTfolio</Link>
+          <Link href="/portfolios" className="btn-primary">See live POTFolios</Link>
+          <Link href="/portfolios/new" className="btn-secondary">Create a POTFolio</Link>
           <Link href="/roadmap" className="btn-secondary">Roadmap</Link>
           <Link href="/mainnet" className="btn-secondary">Mainnet plan</Link>
           <a href="https://github.com/YD811/potbot-v2/tree/feat/pot-index/docs/potfolio" target="_blank" rel="noreferrer" className="btn-secondary">Docs on GitHub</a>

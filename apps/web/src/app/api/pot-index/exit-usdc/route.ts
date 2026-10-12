@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server'
+import { getRpcUrl } from '@/lib/rpc'
 import { AnchorProvider, Program, type Idl, type Wallet } from '@coral-xyz/anchor'
 import { Connection, Keypair, PublicKey, TransactionMessage, VersionedTransaction, type TransactionInstruction } from '@solana/web3.js'
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, createTransferCheckedInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import idl from '@/lib/pot-index/idl.json'
 import registry from '@/lib/pot-index/assets.devnet.json'
 import { buildExitUsdcPair, fetchPot, fetchPotBalances, EXIT_FEE_BPS } from '@/lib/pot-index/client'
-import { buildPythSession, fetchHermesPrices } from '@/lib/pot-index/pyth-post'
+import { fetchHermesPrices } from '@/lib/pot-index/pyth-post'
+import { postPricesAs } from '@/lib/pot-index/pyth-server'
 
 /**
  * POST /api/pot-index/exit-usdc  { wallet, mint, shares }
  *
- * Devnet market maker for "exit to USDC". Builds the whole bundle for the holder to sign:
- *   post Pyth prices → exit_usdc_open → holder sends each leg to the market maker → market maker
- *   pays USDC at the Hermes mid price → exit_usdc_close → close Pyth accounts.
+ * Devnet market maker for "exit to USDC". Posts the Pyth prices itself, then builds ONE transaction
+ * for the holder to sign: exit_usdc_open → holder sends each leg to the market maker → market maker
+ * pays USDC at the Hermes mid price → exit_usdc_close. The price accounts are closed afterwards
+ * through /api/pot-index/cleanup (rent back to the market maker).
  * The market maker is the test-USDC mint authority (POT_INDEX_FAUCET_KEYPAIR), so it pays by
  * minting; on mainnet the sale step becomes Jupiter swaps signed by the holder alone.
  * The program enforces the minimum (Pyth price − conf, minus slippage, minus 0.10% fee) on-chain,
@@ -35,9 +38,11 @@ export async function POST(req: Request) {
   let wallet: PublicKey
   let mint: PublicKey
   let shares: bigint
+  let clientBlockhash: string | null = null
   try {
-    const body = (await req.json()) as { wallet?: string; mint?: string; shares?: string | number }
+    const body = (await req.json()) as { wallet?: string; mint?: string; shares?: string | number; blockhash?: string }
     wallet = new PublicKey(body.wallet ?? '')
+    clientBlockhash = typeof body.blockhash === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(body.blockhash) ? body.blockhash : null
     mint = new PublicKey(body.mint ?? '')
     shares = BigInt(body.shares ?? 0)
     if (shares <= 0n) throw new Error('shares')
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
 
   try {
     const mm = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secret)))
-    const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL ?? 'https://api.devnet.solana.com', 'confirmed')
+    const connection = new Connection(getRpcUrl(), 'confirmed')
     const usdcMint = new PublicKey(registry.usdcMint)
     const treasury = new PublicKey(registry.treasury)
     const pot = await fetchPot(connection, mint)
@@ -71,10 +76,26 @@ export async function POST(req: Request) {
     })
 
     const program = new Program(idl as Idl, new AnchorProvider(connection, readOnlyWallet(wallet), { commitment: 'confirmed' }))
-    // One Pyth session: post once, consume in the exit transaction, close at the end. The exit
-    // itself must be ONE transaction (open … close, checked on-chain), so it is built by hand rather
-    // than through the Pyth builder, which packs consumer instructions by size and may split them.
-    const session = await buildPythSession(connection, readOnlyWallet(wallet), feedIds)
+
+    // The market maker posts the Pyth prices and pays their rent (reclaimed via /cleanup), so the
+    // holder signs ONE transaction: open → sell legs → get paid → close. Their wallet simulates it
+    // cleanly because the price accounts already exist. The exit must be one transaction anyway
+    // (open … close is checked on-chain).
+    const mmAtas = pot.legs.filter((_, i) => legOut[i] > 0n).map((l) => ({ mint: l.mint, ata: getAssociatedTokenAddressSync(l.mint, mm.publicKey) }))
+    const missing = (await connection.getMultipleAccountsInfo(mmAtas.map((a) => a.ata))).map((info, i) => (info ? null : mmAtas[i])).filter((a) => a !== null)
+    const [posted] = await Promise.all([
+      postPricesAs(connection, mm, feedIds),
+      missing.length
+        ? (async () => {
+            const { blockhash: bh } = await connection.getLatestBlockhash('confirmed')
+            const ixs = missing.map((a) => createAssociatedTokenAccountIdempotentInstruction(mm.publicKey, a.ata, mm.publicKey, a.mint))
+            const v = new VersionedTransaction(new TransactionMessage({ payerKey: mm.publicKey, recentBlockhash: bh, instructions: ixs }).compileToV0Message())
+            v.sign([mm])
+            const sig = await connection.sendRawTransaction(v.serialize(), { maxRetries: 5 })
+            await connection.confirmTransaction(sig, 'confirmed')
+          })()
+        : Promise.resolve(),
+    ])
     const { pre, open, close } = await buildExitUsdcPair(program, {
       pot,
       user: wallet,
@@ -82,38 +103,43 @@ export async function POST(req: Request) {
       treasury,
       shares: Number(shares),
       minUsdcOut: 0,
-      priceUpdates: session.priceUpdates,
+      priceUpdates: posted.priceUpdates,
     })
     const userUsdc = getAssociatedTokenAddressSync(usdcMint, wallet)
-    const setup: TransactionInstruction[] = [...pre]
     const sale: TransactionInstruction[] = []
     pot.legs.forEach((l, i) => {
       if (legOut[i] === 0n) return
       const mmAta = getAssociatedTokenAddressSync(l.mint, mm.publicKey)
-      setup.push(createAssociatedTokenAccountIdempotentInstruction(wallet, mmAta, mm.publicKey, l.mint))
       sale.push(createTransferCheckedInstruction(getAssociatedTokenAddressSync(l.mint, wallet), l.mint, mmAta, wallet, legOut[i], l.decimals))
     })
     const pay = payUsdc > 0n ? [createMintToInstruction(usdcMint, userUsdc, mm.publicKey, payUsdc)] : []
-    const { blockhash } = await connection.getLatestBlockhash('finalized')
+    // The holder's browser sends the blockhash its own RPC just returned, so the node that will
+    // send the transaction is guaranteed to know it. Fallback: our RPC.
+    const blockhash = clientBlockhash ?? (await connection.getLatestBlockhash('confirmed')).blockhash
     const v0 = (ixs: TransactionInstruction[]) =>
       new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
-    const exitTx = v0([open, ...sale, ...pay, close])
-    const txs: { tx: VersionedTransaction; signers: { publicKey: PublicKey; secretKey: Uint8Array }[] }[] = [
-      ...session.postTxs,
-      ...(setup.length ? [{ tx: v0(setup), signers: [] }] : []),
-      { tx: exitTx, signers: [] },
-      ...session.closeTxs,
-    ]
-
-    // Partially sign with the market maker where it is a required signer; the holder signs the rest.
-    const out = txs.map(({ tx, signers }) => {
-      const v = tx as VersionedTransaction
-      if (signers.length) v.sign(signers as never[])
+    // `pre` creates the holder's USDC account if needed (idempotent, tiny); it rides in the same
+    // transaction unless that would not fit.
+    // `pre` creates, idempotently, the holder's USDC account, the treasury's USDC account and the
+    // holder's account for every leg (the legs pass through the holder before the sale). Keep only
+    // the ones that do not exist yet, so the exit is one transaction whenever it fits; otherwise the
+    // creations go first in their own transaction (both simulate cleanly).
+    const preTargets = pre.map((ix) => ix.keys[1].pubkey) // ATA create: [payer, ata, owner, mint, ...]
+    const preInfos = await connection.getMultipleAccountsInfo(preTargets, 'confirmed')
+    const preNeeded = pre.filter((_, i) => !preInfos[i])
+    let exitTx = v0([...preNeeded, open, ...sale, ...pay, close])
+    const txs: VersionedTransaction[] = []
+    if (preNeeded.length && exitTx.serialize().length > 1232) {
+      txs.push(v0(preNeeded))
+      exitTx = v0([open, ...sale, ...pay, close])
+    }
+    txs.push(exitTx)
+    const out = txs.map((v) => {
       const needsMm = v.message.staticAccountKeys.some((k, i) => k.equals(mm.publicKey) && v.message.isAccountSigner(i))
       if (needsMm) v.sign([mm])
       return Buffer.from(v.serialize()).toString('base64')
     })
-    return NextResponse.json({ ok: true, txs: out, payUsdc: payUsdc.toString(), legOut: legOut.map(String) })
+    return NextResponse.json({ ok: true, txs: out, payUsdc: payUsdc.toString(), legOut: legOut.map(String), cleanup: posted.cleanup })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }

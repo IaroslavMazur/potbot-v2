@@ -24,15 +24,15 @@ const FAQ_DATA: FAQCategory[] = [
     items: [
       {
         q: 'What is PotBot?',
-        a: 'PotBot turns a basket of Solana assets into one token. A creator picks up to 5 assets and their weights, publishes the POTfolio in one transaction, and the program issues a token that mirrors the whole basket. Anyone can deposit USDC to receive that token, hold it in any wallet, and redeem it any time for every asset inside or for USDC.',
+        a: 'PotBot turns a basket of Solana assets into one token. A creator picks up to 5 assets and their weights, publishes the POTFolio in one transaction, and the program issues a token that mirrors the whole basket. Anyone can deposit USDC to receive that token, hold it in any wallet, and redeem it any time for every asset inside or for USDC.',
       },
       {
-        q: 'What is a POTfolio?',
-        a: 'A POTfolio is one basket with fixed target weights and its own token (for example Solana Blue Chips, $SBC: SOL 50 / BTC 30 / ETH 20). The assets sit in accounts owned by the program. The token supply is the only record of who owns what: there are no shares tables, no issuer, nothing off-chain.',
+        q: 'What is a POTFolio?',
+        a: 'A POTFolio is one basket with fixed target weights and its own token (for example Solana Blue Chips, $SBC: SOL 50 / BTC 30 / ETH 20). The assets sit in accounts owned by the program. The token supply is the only record of who owns what: there are no shares tables, no issuer, nothing off-chain.',
       },
       {
-        q: 'Is a POTfolio a fund? Does someone manage my money?',
-        a: 'No. Nobody manages your money. The basket and its weights are written on-chain when the POTfolio is created and do not change. The program mints and redeems the token; keepers only move the basket toward those weights, inside limits the program enforces.',
+        q: 'Is a POTFolio a fund? Does someone manage my money?',
+        a: 'No. Nobody manages your money. The basket and its weights are written on-chain when the POTFolio is created and do not change. The program mints and redeems the token; keepers only move the basket toward those weights, inside limits the program enforces.',
       },
       {
         q: 'What is the index token?',
@@ -40,11 +40,11 @@ const FAQ_DATA: FAQCategory[] = [
       },
       {
         q: 'What is a Vault, and how is it different?',
-        a: 'Vaults are PotBot v2: group treasuries where members deposit, propose trades and vote. They are in development while the interface is reworked. POTfolio (v3) is the live product: one basket, one token, no votes, fixed weights, exit any time.',
+        a: 'Vaults are PotBot v2: group treasuries where members deposit, propose trades and vote. They are in development while the interface is reworked. POTFolio (v3) is the live product: one basket, one token, no votes, fixed weights, exit any time.',
       },
       {
         q: 'What is the Bot?',
-        a: 'The Bot is the PotBot Telegram side, where the project started: group chats following a POTfolio, digests of what moved and why. For this release the web app is the product; the digest is on the roadmap.',
+        a: 'The Bot is the PotBot Telegram side, where the project started: group chats following a POTFolio, digests of what moved and why. For this release the web app is the product; the digest is on the roadmap.',
       },
     ],
   },
@@ -63,18 +63,18 @@ const FAQ_DATA: FAQCategory[] = [
       },
       {
         q: 'What are the fees?',
-        a: 'Entry 0.30% on every deposit, split on-chain: 40% to the creator, 40% to the referrer, 20% to the protocol. Exit 0.50%, which stays inside the POTfolio for the holders who remain. Redeeming to USDC adds a 0.10% conversion fee. No management fee, no performance fee.',
+        a: 'Entry 0.30% on every deposit, split on-chain: 40% to the creator, 40% to the referrer, 20% to the protocol. Exit 0.50%, which stays inside the POTFolio for the holders who remain. Redeeming to USDC adds a 0.10% conversion fee. No management fee, no performance fee.',
       },
       {
         q: 'Why do I deposit USDC and not SOL or other tokens?',
         a: 'USDC keeps the price math simple: the basket is valued in USD with Pyth and the token is minted at that value. The 1 USDC minimum only stops dust deposits that would cost more in rent and fees than they are worth. Depositing other assets directly is in development.',
       },
       {
-        q: 'Why does a stock POTfolio sometimes refuse deposits?',
+        q: 'Why does a stock POTFolio sometimes refuse deposits?',
         a: 'Tokenized stocks are priced by Pyth equity feeds, which stop publishing when US markets are closed. The program refuses to mint on a price older than 5 minutes, so deposits reopen when the market opens. Redeeming for assets always works.',
       },
       {
-        q: 'What do I see on the POTfolio page?',
+        q: 'What do I see on the POTFolio page?',
         a: 'NAV, index price and supply live from the chain; the index price history; the composition against target weights; every deposit, redemption and rebalance in the activity feed; and, with a wallet connected, your holding, cost basis and P&L computed from your own on-chain history.',
       },
     ],
@@ -86,15 +86,15 @@ const FAQ_DATA: FAQCategory[] = [
     items: [
       {
         q: 'Can the creator run away with my money?',
-        a: 'No. The assets sit in program-owned accounts (PDAs) that have no private key, and the program has no withdraw instruction. The creator can only pause new deposits or cap the size of the POTfolio. Not the creator, not PotBot, not a keeper can take assets out.',
+        a: 'No. The assets sit in program-owned accounts (PDAs) that have no private key, and the program has no withdraw instruction. The creator can only pause new deposits or cap the size of the POTFolio. Not the creator, not PotBot, not a keeper can take assets out.',
       },
       {
         q: 'Who are keepers and what can they do?',
-        a: 'Keepers are bots that keep the basket at its target weights: ours, partners, or your own. The program bounds every trade: toward the target only, never past it, at most 25% of the POTfolio per trade, inside the Pyth price band, and opened and closed in the same transaction. If a keeper delivers less than the minimum, the whole transaction is reverted.',
+        a: 'Keepers are bots that keep the basket at its target weights: ours, partners, or your own. The program bounds every trade: toward the target only, never past it, at most 25% of the POTFolio per trade, inside the Pyth price band, and opened and closed in the same transaction. If a keeper delivers less than the minimum, the whole transaction is reverted.',
       },
       {
         q: 'What if the price oracle is wrong or stale?',
-        a: 'Deposits use Pyth pull prices posted in the same transaction, at most 5 minutes old, with a confidence band no wider than 2%, and the program prices conservatively (price minus confidence in favour of the POTfolio). If any of that fails, the deposit is refused. Redeeming for assets needs no price at all.',
+        a: 'Deposits use Pyth pull prices posted in the same transaction, at most 5 minutes old, with a confidence band no wider than 2%, and the program prices conservatively (price minus confidence in favour of the POTFolio). If any of that fails, the deposit is refused. Redeeming for assets needs no price at all.',
       },
       {
         q: 'Has the program been audited?',
@@ -102,7 +102,7 @@ const FAQ_DATA: FAQCategory[] = [
       },
       {
         q: 'What are the real risks?',
-        a: 'The assets inside can lose value, and the token follows them. A POTfolio of memes is as risky as the memes. Smart-contract risk exists in any program; the devnet build is for testing. Keeper slippage up to 1% per rebalance is the cost of keeping the basket at target.',
+        a: 'The assets inside can lose value, and the token follows them. A POTFolio of memes is as risky as the memes. Smart-contract risk exists in any program; the devnet build is for testing. Keeper slippage up to 1% per rebalance is the cost of keeping the basket at target.',
       },
       {
         q: 'Is this live on mainnet?',
@@ -116,16 +116,16 @@ const FAQ_DATA: FAQCategory[] = [
     icon: '',
     items: [
       {
-        q: 'How do I create a POTfolio?',
-        a: 'Open Create, give it a name (the ticker suggests itself), pick up to 5 assets from the listed set, set the weights to 100%, and confirm one transaction. The POTfolio and its token exist immediately with a Pot... address. Creating costs about 0.03 SOL in account rent.',
+        q: 'How do I create a POTFolio?',
+        a: 'Open Create, give it a name (the ticker suggests itself), pick up to 5 assets from the listed set, set the weights to 100%, and confirm one transaction. The POTFolio and its token exist immediately with a Pot... address. Creating costs about 0.03 SOL in account rent.',
       },
       {
         q: 'How do creators and referrers earn?',
-        a: 'Every deposit pays 0.30%: 40% to the creator, 40% to whoever referred the depositor, 20% to the protocol. It is paid inside the deposit transaction; nothing to claim. Share your POTfolio link: the referral is remembered for 30 days. The calculator on /learn shows what that adds up to.',
+        a: 'Every deposit pays 0.30%: 40% to the creator, 40% to whoever referred the depositor, 20% to the protocol. It is paid inside the deposit transaction; nothing to claim. Share your POTFolio link: the referral is remembered for 30 days. The calculator on /learn shows what that adds up to.',
       },
       {
         q: 'Can I change the weights later?',
-        a: 'Not in this version: weights are fixed at creation, which is what makes the token predictable for holders. Managed POTfolios (creator adjusts inside a public mandate with a timelock) and Community POTfolios (holders vote with the token) are on the roadmap.',
+        a: 'Not in this version: weights are fixed at creation, which is what makes the token predictable for holders. Managed POTFolios (creator adjusts inside a public mandate with a timelock) and Community POTFolios (holders vote with the token) are on the roadmap.',
       },
       {
         q: 'Which assets can go in?',
@@ -133,7 +133,7 @@ const FAQ_DATA: FAQCategory[] = [
       },
       {
         q: 'What is Garden mode?',
-        a: 'Every POTfolio is a plant. Its level is a function of the value held inside, read from on-chain supply and price, so it cannot be faked. Deposits water it, redemptions dry it out. Levels run from Seedling (first deposit) to Mature Tree (from $1M).',
+        a: 'Every POTFolio is a plant. Its level is a function of the value held inside, read from on-chain supply and price, so it cannot be faked. Deposits water it, redemptions dry it out. Levels run from Seedling (first deposit) to Mature Tree (from $1M).',
       },
     ],
   },
@@ -178,7 +178,7 @@ export default function FAQPage() {
       <PageHeader
         eyebrow="FAQ"
         title="Questions, answered"
-        lede={<>POTfolio in plain words. Longer explanations live on <Link href="/learn" className="text-pot-green underline">Learn</Link>, the mechanics in the <a href="https://github.com/YD811/potbot-v2/tree/main/docs/potfolio" target="_blank" rel="noreferrer" className="text-pot-green underline">docs</a>.</>}
+        lede={<>POTFolio in plain words. Longer explanations live on <Link href="/learn" className="text-pot-green underline">Learn</Link>, the mechanics in the <a href="https://github.com/YD811/potbot-v2/tree/main/docs/potfolio" target="_blank" rel="noreferrer" className="text-pot-green underline">docs</a>.</>}
       />
 
       {/* Category tabs */}
@@ -212,7 +212,7 @@ export default function FAQPage() {
             Read Learn
           </Link>
           <Link href="/portfolios" className="btn-primary text-sm py-2 px-5">
-            Open the POTfolios
+            Open the POTFolios
           </Link>
         </div>
       </div>

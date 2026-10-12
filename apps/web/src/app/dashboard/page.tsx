@@ -1,496 +1,216 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
-import { useConnection } from '@solana/wallet-adapter-react'
-import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js'
-import { usePots } from '@/hooks/usePots'
-import { useMockStore } from '@/lib/mock-store'
-import { useSolPrice } from '@/lib/prices'
-import { calculateTamaStats } from '@/lib/tamagotchi/stats'
-import { useHumanText } from '@/hooks/useHumanText'
-import { useActiveWallet } from '@/hooks/useActiveWallet'
+import { useMemo } from 'react'
+import toast from 'react-hot-toast'
+import { useQuery } from '@tanstack/react-query'
+import { getAssociatedTokenAddressSync } from '@solana/spl-token'
+import { PageHeader } from '@/components/PageHeader'
 import { ConnectButton } from '@/components/ConnectButton'
-import { SolPrice } from '@/components/SolPrice'
-import { AddSolModal } from '@/components/AddSolModal'
-import { JupiterSwapPanel } from '@/components/JupiterSwapPanel'
+import { usePotIndexProgram, usePots, useAllPotStats } from '@/hooks/usePotIndex'
+import { fetchPotActivity, fetchWalletPosition, type PotEvent, type PotView } from '@/lib/pot-index/client'
+import { plantSrc, potSeries, stageForUsd, STAGES } from '@/lib/pot-index/garden'
+import { ENTRY_FEE_BPS } from '@/lib/pot-index/client'
+import { explorerTx } from '@/lib/pot-index/registry'
 
-const QUEST_PLACEHOLDER = [
-  {
-    id: 'q1',
-    icon: '🐦',
-    title: 'Share on Twitter',
-    desc: 'Tweet about your pot with #PotBotSeason1',
-    points: 100,
-    done: false,
-  },
-  {
-    id: 'q2',
-    icon: '👥',
-    title: 'Invite 3 Members',
-    desc: 'Refer 3 users who each deposit ≥ 0.1 SOL',
-    points: 500,
-    done: false,
-  },
-  {
-    id: 'q3',
-    icon: '🗳️',
-    title: 'Active Voter',
-    desc: 'Vote on 10 proposals across different pots',
-    points: 150,
-    done: false,
-  },
-  {
-    id: 'q4',
-    icon: '🔒',
-    title: 'Private Pot Creator',
-    desc: 'Create your first private pot',
-    points: 300,
-    done: false,
-  },
-]
+const usd = (v: number, d = 2) => `$${v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })}`
+const CREATOR_SHARE = 0.4 // of the entry fee
 
-const POINTS_ACTIONS = [
-  { action: 'Create a pot',                    points: 100 },
-  { action: 'First deposit (any pot)',          points: 50  },
-  { action: 'Vote on a proposal',              points: 5   },
-  { action: 'Create a passing proposal',       points: 25  },
-  { action: 'Refer a user who deposits ≥0.1 SOL', points: 200 },
-  { action: 'Member joins a pot you created',  points: 20  },
-  { action: 'Pot reaches 10 members',          points: 500 },
-  { action: 'Daily check-in',                  points: 1   },
-]
-
-function SkeletonCard() {
-  return (
-    <div className="card p-5 animate-pulse">
-      <div className="h-5 bg-pot-border rounded w-1/2 mb-3" />
-      <div className="h-4 bg-pot-border rounded w-3/4 mb-2" />
-      <div className="h-4 bg-pot-border rounded w-1/3" />
-    </div>
-  )
-}
-
-function StatCard({ label, value, sub, accent }: { label: string; value: React.ReactNode; sub?: string; accent?: boolean }) {
-  return (
-    <div className={`card p-4 text-center ${accent ? 'glow-green border-pot-green/20' : ''}`}>
-      <div className={`text-2xl font-bold ${accent ? 'text-pot-green' : 'text-white'}`}>{value}</div>
-      {sub && <div className="text-[10px] text-pot-muted font-mono">{sub}</div>}
-      <div className="text-xs text-pot-muted mt-1">{label}</div>
-    </div>
-  )
-}
-
+/**
+ * My Dashboard: only what belongs to the connected wallet. Positions with the share of each
+ * POTFolio, the POTFolios this wallet created with the fees they earned, and the wallet's own
+ * activity. Everything is read from the chain (token accounts + transaction history).
+ */
 export default function DashboardPage() {
-  const t = useHumanText()
-  const wallet = useActiveWallet()
-  const { connection } = useConnection()
-  const { data: allPots, isLoading } = usePots()
-  const { price: solPrice } = useSolPrice()
-  const walletStr = wallet.address ?? ''
-  const connected = wallet.isConnected
-  const [questTab, setQuestTab] = useState<'active' | 'points'>('active')
-  const [showAddSol, setShowAddSol] = useState(false)
+  const { connection, pubkey } = usePotIndexProgram()
+  const pots = usePots()
+  const stats = useAllPotStats(pots.data)
+  const me = pubkey?.toBase58()
 
-  /* ── Live wallet SOL balance (signed in only) ── */
-  const [walletSol, setWalletSol] = useState<number | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    if (!walletStr) { setWalletSol(null); return }
-    let pk: PublicKey
-    try { pk = new PublicKey(walletStr) } catch { return }
-    connection.getBalance(pk).then((lamports) => {
-      if (!cancelled) setWalletSol(lamports / LAMPORTS_PER_SOL)
-    }).catch(() => { if (!cancelled) setWalletSol(0) })
-    return () => { cancelled = true }
-  }, [connection, walletStr])
+  const data = useQuery({
+    queryKey: ['pot-index', 'dashboard', me, (pots.data ?? []).map((p) => p.address.toBase58()).join(',')],
+    enabled: !!pubkey && !!pots.data && pots.data.length > 0,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const list = pots.data!
+      const atas = list.map((p) => getAssociatedTokenAddressSync(p.indexMint, pubkey!))
+      const infos = await connection.getMultipleAccountsInfo(atas, 'confirmed')
+      const positions: { pot: PotView; shares: number; costUsd: number; realizedUsd: number; depositedUsd: number; withdrawnUsd: number }[] = []
+      for (let i = 0; i < list.length; i++) {
+        if (!infos[i]) continue
+        const bal = await connection.getTokenAccountBalance(atas[i], 'confirmed').catch(() => null)
+        const shares = Number(bal?.value.uiAmount ?? 0)
+        const pos = await fetchWalletPosition(connection, list[i], pubkey!).catch(() => null)
+        if (shares <= 0 && !(pos && pos.events > 0)) continue
+        positions.push({ pot: list[i], shares, costUsd: pos?.costUsd ?? 0, realizedUsd: pos?.realizedUsd ?? 0, depositedUsd: pos?.depositedUsd ?? 0, withdrawnUsd: pos?.withdrawnUsd ?? 0 })
+      }
+      // POTFolios this wallet created: entry fees earned (40% of each deposit's fee), from the Pot's history.
+      const mine = list.filter((p) => p.creator.equals(pubkey!))
+      const created: { pot: PotView; deposits: number; feesUsd: number; events: PotEvent[] }[] = []
+      for (const p of mine) {
+        const ev = await fetchPotActivity(connection, p, 100).catch(() => [] as PotEvent[])
+        const deps = ev.filter((e): e is Extract<PotEvent, { kind: 'deposit' }> => e.kind === 'deposit')
+        created.push({ pot: p, deposits: deps.length, feesUsd: deps.reduce((s, e) => s + e.feeUsdc * CREATOR_SHARE, 0), events: ev })
+      }
+      // The wallet's own activity across the POTFolios it touched.
+      type Mine = (Extract<PotEvent, { kind: 'deposit' }> | Extract<PotEvent, { kind: 'exit' }>) & { pot: PotView }
+      const activity: Mine[] = []
+      for (const h of positions) {
+        const ev = await fetchPotActivity(connection, h.pot, 60).catch(() => [] as PotEvent[])
+        for (const e of ev) if ((e.kind === 'deposit' || e.kind === 'exit') && e.user === me) activity.push({ ...e, pot: h.pot } as Mine)
+      }
+      activity.sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
+      return { positions, created, activity: activity.slice(0, 20) }
+    },
+  })
 
-  /* ── My pots ── */
-  const allMembers = useMockStore.getState().members
-  const myMemberships = useMemo(
-    () => allMembers.filter((m) => m.wallet === walletStr),
-    [allMembers, walletStr]
+  const rows = useMemo(
+    () =>
+      (data.data?.positions ?? []).map((h) => {
+        const st = stats.data?.[h.pot.address.toBase58()]
+        const value = h.shares * (st?.indexPrice ?? 1)
+        const pnl = h.costUsd > 0 ? value - h.costUsd : 0
+        const share = st && st.supply > 0 ? (h.shares / st.supply) * 100 : 0
+        return { ...h, value, pnl, pct: h.costUsd > 0 ? (pnl / h.costUsd) * 100 : 0, share, nav: st?.navUsd ?? 0 }
+      }),
+    [data.data, stats.data],
   )
-  const myPotPubkeys = useMemo(
-    () => new Set(myMemberships.map((m) => m.potPubkey)),
-    [myMemberships]
-  )
-  const myPots = useMemo(
-    () => (allPots ?? []).filter((p: any) => myPotPubkeys.has(p.pubkey) || p.authority === walletStr),
-    [allPots, myPotPubkeys, walletStr]
-  )
-
-  /* ── Portfolio totals ── */
-  const totalSol = myPots.reduce((s: number, p: any) => s + (p.balance ?? 0), 0)
-  const totalUsd = solPrice ? totalSol * solPrice : 0
-
-  /* ── Referrals ── */
-  const referrals = useMockStore.getState().referrals ?? []
-  const myReferrals = referrals.filter((r: any) => r.referrer === walletStr)
-  const referralFees = myReferrals.reduce((s: number, r: any) => s + (r.level1Earning ?? 0), 0)
-
-  /* ── Pending proposals ── */
-  const allProposals = useMockStore.getState().proposals ?? []
-  const pending = allProposals.filter(
-    (p: any) =>
-      p.status === 'active' &&
-      myPotPubkeys.has(p.potPubkey) &&
-      !(p.voters ?? []).includes(walletStr)
-  )
-
-  /* ── Tamagotchi emoji for each pot ── */
-  function potTama(pot: any) {
-    const stats = calculateTamaStats({
-      tradeVolume: (pot.totalVolume ?? 0) * (solPrice ?? 100),
-      memberCount: pot.memberCount ?? 1,
-      winRate: 0.5,
-      yieldApy: 0,
-      ageSeconds: (Date.now() - (pot.createdAt ?? Date.now())) / 1000,
-    })
-    return stats.emoji
-  }
-
-  /* ── Aggregate user analytics across mock-store memberships ── */
-  const totalDepositedSol = myMemberships.reduce(
-    (s: number, m: any) => s + (m.depositTotal ?? 0),
-    0,
-  )
-  const totalWithdrawnSol = myMemberships.reduce(
-    (s: number, m: any) => s + (m.withdrawTotal ?? 0),
-    0,
-  )
-  const realisedPnlSol = totalWithdrawnSol - totalDepositedSol
-
-  /* ── Not connected ── */
-  if (!connected) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="text-5xl mb-4">🪴</div>
-        <h1 className="text-2xl font-bold text-white mb-2">{t('My Dashboard')}</h1>
-        <p className="text-pot-muted mb-6 max-w-sm">
-          Sign in to see your pots, balance, votes you owe and your activity.
-        </p>
-        <ConnectButton />
-      </div>
-    )
-  }
-
-  const sourceLabel = wallet.source === 'privy' ? 'Email account' : 'Wallet'
+  const total = rows.reduce((a, r) => a + r.value, 0)
+  const totalPnl = rows.reduce((a, r) => a + r.pnl, 0)
+  const totalRealized = rows.reduce((a, r) => a + r.realizedUsd, 0)
+  const creatorFees = (data.data?.created ?? []).reduce((a, c) => a + c.feesUsd, 0)
+  const tone = (v: number) => (v >= 0 ? 'text-pot-green' : 'text-red-300')
+  const sign = (v: number) => (v >= 0 ? '+' : '−')
 
   return (
-    <div>
-      {/* ── Profile header ─────────────────────────────────────────── */}
-      <div className="card p-6 mb-6 bg-gradient-to-br from-pot-card to-pot-dark border-pot-border">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0">
-            {/* Avatar — first letter of label, gradient bg */}
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black text-pot-dark shrink-0"
-              style={{ background: 'linear-gradient(135deg,#14F195 0%,#9945FF 100%)' }}
-              aria-hidden
-            >
-              {(wallet.label || '🪴').charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-black text-white truncate">{t('My Dashboard')}</h1>
-              <div className="text-sm text-white truncate">{wallet.label}</div>
-              <div className="flex items-center gap-2 mt-1 text-[11px] text-pot-muted">
-                <span className="px-1.5 py-0.5 rounded bg-pot-border/40 uppercase tracking-wider font-bold">
-                  {sourceLabel}
-                </span>
-                <span className="font-mono truncate">
-                  {walletStr ? `${walletStr.slice(0, 6)}…${walletStr.slice(-6)}` : '—'}
-                </span>
-              </div>
-            </div>
-          </div>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <PageHeader eyebrow="My dashboard" title={pubkey ? 'Yours, from the chain' : 'My dashboard'} lede={pubkey ? 'Only what this wallet holds, created and did. Nothing here is stored by PotBot.' : 'Connect a wallet to see your POTFolios, your entry prices and what you earned.'} />
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {pending.length > 0 && (
-              <Link
-                href="#pending-votes"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium animate-pulse"
-              >
-                🗳️ {pending.length} {t('Vote')}{pending.length !== 1 ? 's' : ''} pending
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowAddSol(true)}
-              disabled={!walletStr}
-              className="px-4 py-2 rounded-xl bg-pot-green hover:bg-pot-green/90 text-pot-dark font-bold text-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              + {t('Deposit')}
-            </button>
-          </div>
+      {!pubkey && (
+        <div className="card flex flex-col items-start gap-3 p-6">
+          <ConnectButton />
+          <Link href="/portfolios" className="text-sm text-pot-green hover:underline">or browse POTFolios first →</Link>
         </div>
-
-        {/* ── Balance + analytics row ──────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
-          <StatCard
-            label={t('Wallet')}
-            value={walletSol == null
-              ? '—'
-              : <SolPrice sol={walletSol} compact />}
-          />
-          <StatCard
-            label="In pots"
-            value={<SolPrice sol={totalSol} compact />}
-            accent
-          />
-          <StatCard
-            label={`Active ${t('Vaults')}`}
-            value={String(myPots.length)}
-          />
-          <StatCard
-            label={t('PnL')}
-            value={
-              <span className={realisedPnlSol >= 0 ? 'text-pot-green' : 'text-red-400'}>
-                {realisedPnlSol >= 0 ? '+' : ''}<SolPrice sol={realisedPnlSol} compact />
-              </span>
-            }
-            sub={`${totalDepositedSol.toFixed(2)} SOL deposited`}
-          />
-        </div>
-      </div>
-
-      {/* ── Quick swap (personal wallet) ───────────────────────────── */}
-      <section className="mb-8">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h2 className="text-lg font-bold text-white">⚡ Quick {t('Swap')}</h2>
-          <span className="text-[11px] text-pot-muted">
-            Trade between tokens straight from your wallet via Jupiter
-          </span>
-        </div>
-        <JupiterSwapPanel mode="personal" />
-      </section>
-
-      {/* ── My POTs ──────────────────────────────────────────────── */}
-      <section className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-white">My POTs</h2>
-          <Link href="/my-pots" className="text-xs text-pot-muted hover:text-white transition">
-            Full view →
-          </Link>
-        </div>
-
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
-          </div>
-        ) : myPots.length === 0 ? (
-          <div className="card p-8 text-center">
-            <div className="text-3xl mb-2">🌱</div>
-            <h3 className="text-base font-semibold text-white mb-1">No POTs yet</h3>
-            <p className="text-sm text-pot-muted mb-4">Join an existing vault or create your own.</p>
-            <div className="flex gap-3 justify-center">
-              <Link href="/leaderboard" className="btn-secondary text-sm py-2">Browse Pots</Link>
-              <Link href="/create" className="btn-primary text-sm py-2">Create POT</Link>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {myPots.map((pot: any) => {
-              const membership = myMemberships.find((m) => m.potPubkey === pot.pubkey)
-              const sharePct = pot.totalShares > 0 && membership
-                ? (membership.shares / pot.totalShares) * 100
-                : 0
-              const myValueSol = pot.balance * (sharePct / 100)
-              const myValueUsd = solPrice ? myValueSol * solPrice : 0
-              return (
-                <Link
-                  key={pot.pubkey}
-                  href={`/pots/${pot.pubkey}`}
-                  className="card p-4 hover:border-pot-green/30 transition group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl group-hover:animate-float">{pot.emoji}</span>
-                      <div>
-                        <div className="text-sm font-semibold text-white">{pot.name}</div>
-                        <div className="text-[10px] text-pot-muted font-mono">
-                          {pot.pubkey.slice(0, 4)}…{pot.pubkey.slice(-4)}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-lg">{potTama(pot)}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-pot-dark rounded-lg p-2">
-                      <div className="text-pot-green font-bold">
-                        {myValueUsd > 0 ? `$${myValueUsd.toFixed(2)}` : `${myValueSol.toFixed(3)} SOL`}
-                      </div>
-                      <div className="text-pot-muted">My Value</div>
-                    </div>
-                    <div className="bg-pot-dark rounded-lg p-2">
-                      <div className="text-white font-bold">{sharePct.toFixed(1)}%</div>
-                      <div className="text-pot-muted">My Share</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                      pot.isPublic ? 'bg-pot-green/10 text-pot-green' : 'bg-pot-accent/10 text-pot-accent'
-                    }`}>
-                      {pot.isPublic ? 'Public' : 'Private'}
-                    </span>
-                    <span className="text-[10px] text-pot-muted">{pot.memberCount} members</span>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* ── Pending Votes ─────────────────────────────────────────── */}
-      {pending.length > 0 && (
-        <section id="pending-votes" className="mb-8 scroll-mt-24">
-          <h2 className="text-lg font-bold text-white mb-4">⏳ Pending {t('Vote')}s</h2>
-          <div className="space-y-2">
-            {pending.map((p: any) => {
-              const pot = (allPots ?? []).find((pot: any) => pot.pubkey === p.potPubkey) as any
-              const hoursLeft = p.createdAt
-                ? Math.max(0, 24 - (Date.now() - p.createdAt) / 3_600_000)
-                : 24
-              return (
-                <Link
-                  key={p.pubkey}
-                  href={`/pots/${p.potPubkey}?tab=proposals`}
-                  className="card p-4 flex items-center justify-between gap-4 hover:border-amber-500/30 transition"
-                >
-                  <div>
-                    <div className="text-sm text-white font-medium">{p.description}</div>
-                    <div className="text-xs text-pot-muted mt-0.5">
-                      {pot?.name ?? p.potPubkey.slice(0, 8)} · {hoursLeft.toFixed(0)}h remaining
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-xs px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
-                    Vote →
-                  </span>
-                </Link>
-              )
-            })}
-          </div>
-        </section>
       )}
 
-      {/* ── Quests & Points ───────────────────────────────────────── */}
-      <section className="mb-8">
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            onClick={() => setQuestTab('active')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-              questTab === 'active' ? 'bg-pot-card border border-pot-border text-white' : 'text-pot-muted hover:text-white'
-            }`}
-          >
-            🎯 Active Quests
-          </button>
-          <button
-            onClick={() => setQuestTab('points')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-              questTab === 'points' ? 'bg-pot-card border border-pot-border text-white' : 'text-pot-muted hover:text-white'
-            }`}
-          >
-            ⭐ Points Table
-          </button>
-        </div>
-
-        {questTab === 'active' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {QUEST_PLACEHOLDER.map((q) => (
-              <div
-                key={q.id}
-                className="card p-4 flex items-start gap-3 opacity-90"
-              >
-                <div className="text-2xl shrink-0">{q.icon}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-white">{q.title}</div>
-                  <div className="text-xs text-pot-muted mt-0.5">{q.desc}</div>
-                  <div className="text-xs text-pot-green font-bold mt-1.5">+{q.points} pts</div>
-                </div>
-                <span className="shrink-0 text-xs px-2.5 py-1 rounded-full bg-pot-card border border-pot-border text-pot-muted">
-                  Soon
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {questTab === 'points' && (
-          <div className="card overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-pot-border">
-                  <th className="text-left px-4 py-3 text-pot-muted font-medium text-xs">Action</th>
-                  <th className="text-right px-4 py-3 text-pot-muted font-medium text-xs">Points</th>
-                </tr>
-              </thead>
-              <tbody>
-                {POINTS_ACTIONS.map((row, i) => (
-                  <tr key={i} className="border-b border-pot-border/50 last:border-0 hover:bg-pot-card/50">
-                    <td className="px-4 py-3 text-gray-300">{row.action}</td>
-                    <td className="px-4 py-3 text-right text-pot-green font-bold">+{row.points}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* ── Referrals ─────────────────────────────────────────────── */}
-      <section className="mb-8">
-        <h2 className="text-lg font-bold text-white mb-4">🔗 Referrals</h2>
-        <div className="card p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-            <div className="text-center">
-              <div className="text-xl font-bold text-white">{myReferrals.length}</div>
-              <div className="text-xs text-pot-muted">Referred Users</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-pot-green">
-                {referralFees.toFixed(3)} SOL
-              </div>
-              <div className="text-xs text-pot-muted">Fees Earned</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold text-white">20%</div>
-              <div className="text-xs text-pot-muted">Your Cut</div>
-            </div>
+      {pubkey && (
+        <>
+          <div className="mb-6 grid gap-3 sm:grid-cols-4">
+            <Tile label="Holdings value" value={usd(total)} />
+            <Tile label="Unrealized P&L" value={`${sign(totalPnl)}${usd(Math.abs(totalPnl))}`} tone={tone(totalPnl)} />
+            <Tile label="Realized (to USDC)" value={`${sign(totalRealized)}${usd(Math.abs(totalRealized))}`} tone={tone(totalRealized)} />
+            <Tile label="Creator fees earned" value={usd(creatorFees)} hint={`${CREATOR_SHARE * 100}% of each ${ENTRY_FEE_BPS / 100}% entry fee`} />
           </div>
 
-          {walletStr && (
-            <div>
-              <div className="text-xs text-pot-muted mb-1.5">Your referral link</div>
-              <div className="flex gap-2">
-                <div className="flex-1 bg-pot-dark border border-pot-border rounded-xl px-3 py-2 text-xs font-mono text-pot-muted truncate">
-                  {typeof window !== 'undefined' ? window.location.origin : 'https://potbot.fun'}/pots/[pot]?ref={walletStr.slice(0, 8)}…
-                </div>
-                <button
-                  onClick={() => {
-                    const base = typeof window !== 'undefined' ? window.location.origin : 'https://potbot.fun'
-                    navigator.clipboard.writeText(`${base}?ref=${walletStr}`)
-                  }}
-                  className="btn-secondary text-xs py-2 px-4 shrink-0"
-                >
-                  Copy
-                </button>
-              </div>
-              <p className="text-xs text-pot-muted mt-2">
-                Earn 20% of all swap fees from users you refer, paid instantly to your wallet.
-              </p>
+          <section className="card mb-6 p-5">
+            <h2 className="mb-3 font-semibold text-white">Your POTFolios</h2>
+            {data.isLoading && <p className="text-sm text-white/70">Reading your wallet…</p>}
+            {data.data && rows.length === 0 && (
+              <p className="text-sm text-white/70">Nothing yet. Pick a POTFolio, deposit USDC, one signature.</p>
+            )}
+            <div className="divide-y divide-pot-border/60">
+              {rows.map((r) => {
+                const lvl = stageForUsd(r.nav)
+                return (
+                  <Link key={r.pot.address.toBase58()} href={`/portfolios/${r.pot.indexMint.toBase58()}`} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3 transition hover:bg-white/[0.03] sm:grid-cols-[auto_1fr_auto_auto_auto]">
+                    <img src={plantSrc(potSeries(r.pot), lvl)} alt="" className="h-10 w-10 rounded-lg object-contain" />
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-white">{r.pot.name} <span className="text-white/50">${r.pot.symbol}</span></div>
+                      <div className="text-xs text-white/60">{r.shares.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens · avg entry {r.shares > 0 && r.costUsd > 0 ? usd(r.costUsd / r.shares, 4) : '—'} · Level {lvl} {STAGES[lvl - 1].name}</div>
+                    </div>
+                    <div className="hidden text-right sm:block">
+                      <div className="text-xs text-white/50">your share</div>
+                      <div className="font-semibold text-white">{r.share.toFixed(2)}%</div>
+                    </div>
+                    <div className="hidden text-right sm:block">
+                      <div className="text-xs text-white/50">of {usd(r.nav, 0)}</div>
+                      <div className="font-semibold text-white">{usd(r.value)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold text-white sm:hidden">{usd(r.value)}</div>
+                      <div className={`text-xs font-semibold ${tone(r.pnl)}`}>{r.costUsd > 0 ? `${sign(r.pnl)}${usd(Math.abs(r.pnl))} (${r.pnl >= 0 ? '+' : ''}${r.pct.toFixed(2)}%)` : ''}</div>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/portfolios" className="btn-secondary">Browse POTFolios</Link>
+              <Link href="/portfolios/new" className="btn-primary">Create your own</Link>
+            </div>
+          </section>
+
+          <section className="card mb-6 p-5">
+            <h2 className="font-semibold text-white">Invite and earn</h2>
+            <p className="mt-1 text-sm text-white/70">Deposits made through your link pay you {CREATOR_SHARE * 100}% of the {ENTRY_FEE_BPS / 100}% entry fee, on-chain, in the same transaction. One link per POTFolio.</p>
+            <div className="mt-3 space-y-2">
+              {(rows.length ? rows.map((r) => r.pot) : (pots.data ?? []).slice(0, 3)).map((p) => {
+                const link = `${typeof window !== 'undefined' ? window.location.origin : 'https://potbot.fun'}/portfolios/${p.indexMint.toBase58()}?ref=${me}`
+                return (
+                  <div key={p.address.toBase58()} className="flex items-center gap-2">
+                    <span className="w-24 shrink-0 truncate text-sm text-white">${p.symbol}</span>
+                    <input readOnly value={link} className="input flex-1 truncate text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <button type="button" className="btn-secondary shrink-0" onClick={() => { void navigator.clipboard.writeText(link); toast.success(`Link for $${p.symbol} copied`) }}>Copy</button>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          {data.data && data.data.created.length > 0 && (
+            <section className="card mb-6 p-5">
+              <h2 className="mb-3 font-semibold text-white">POTFolios you created</h2>
+              <div className="divide-y divide-pot-border/60">
+                {data.data.created.map((c) => {
+                  const st = stats.data?.[c.pot.address.toBase58()]
+                  return (
+                    <Link key={c.pot.address.toBase58()} href={`/portfolios/${c.pot.indexMint.toBase58()}`} className="flex items-center gap-3 py-3 transition hover:bg-white/[0.03]">
+                      <img src={plantSrc(potSeries(c.pot), stageForUsd(st?.navUsd ?? 0))} alt="" className="h-9 w-9 rounded-lg object-contain" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-white">{c.pot.name} <span className="text-white/50">${c.pot.symbol}</span></div>
+                        <div className="text-xs text-white/60">TVL {usd(st?.navUsd ?? 0, 0)} · {st?.holders ?? 0} holders · {c.deposits} deposits</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-white/50">fees earned</div>
+                        <div className="font-semibold text-pot-green">{usd(c.feesUsd)}</div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </section>
           )}
-        </div>
-      </section>
 
-      <AddSolModal
-        address={walletStr}
-        open={showAddSol}
-        onClose={() => setShowAddSol(false)}
-      />
+          {data.data && data.data.activity.length > 0 && (
+            <section className="card p-5">
+              <h2 className="mb-3 font-semibold text-white">Your activity</h2>
+              <ul className="divide-y divide-pot-border/60 text-sm">
+                {data.data.activity.map((e) => (
+                  <li key={e.sig} className="flex items-center justify-between gap-3 py-2">
+                    <span className="text-white">
+                      {e.kind === 'deposit' ? `Deposited ${usd(e.amountUsdc)} → ${e.shares.toLocaleString(undefined, { maximumFractionDigits: 4 })} $${e.pot.symbol}` : `Redeemed ${e.shares.toLocaleString(undefined, { maximumFractionDigits: 4 })} $${e.pot.symbol}${e.toUsdc ? ` → ${usd(e.usdcOut)}` : ' for the assets'}`}
+                    </span>
+                    <span className="shrink-0 text-xs text-white/50">
+                      {e.time ? new Date(e.time * 1000).toLocaleString() : ''} <a className="ml-1 text-pot-green hover:underline" href={explorerTx(e.sig)} target="_blank" rel="noreferrer">tx ↗</a>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function Tile({ label, value, tone, hint }: { label: string; value: string; tone?: string; hint?: string }) {
+  return (
+    <div className="card p-4">
+      <div className="text-xs text-white/60">{label}</div>
+      <div className={`mt-0.5 text-xl font-black ${tone ?? 'text-white'}`}>{value}</div>
+      {hint && <div className="text-[11px] text-white/40">{hint}</div>}
     </div>
   )
 }

@@ -26,5 +26,5 @@ export async function grindKeypair(
   }
 }
 
-/** Index mints start with "Pot" (base58 has no capital O) so every POTfolio token is recognisable by its address. */
+/** Index mints start with "Pot" (base58 has no capital O) so every POTFolio token is recognisable by its address. */
 export const INDEX_MINT_PREFIX = 'Pot'

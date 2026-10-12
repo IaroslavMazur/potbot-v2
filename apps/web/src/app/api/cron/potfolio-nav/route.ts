@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { recordNav } from '@/lib/pot-index/nav-history.server'
 
 /**
- * GET /api/cron/potfolio-nav — Vercel cron, every 15 minutes: one NAV snapshot per live POTfolio.
+ * GET /api/cron/potfolio-nav — Vercel cron, every 15 minutes: one NAV snapshot per live POTFolio.
  * Protected by CRON_SECRET in production; open on preview deployments so the history can be
  * exercised there (it only writes values the server computed itself).
  */

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { PublicKey } from '@solana/web3.js'
 import {
   useMyIndexBalance,
@@ -11,11 +12,14 @@ import {
   usePotIndexActions,
   usePotStats,
   useAssetPublishTimes,
+  useWalletPosition,
+  useNavHistory,
 } from '@/hooks/usePotIndex'
 import { estimateShares, EXIT_FEE_BPS, ENTRY_FEE_BPS, MIN_DEPOSIT_USDC } from '@/lib/pot-index/client'
 import { assetByMint, explorerAddress, explorerTx, POT_INDEX_SETTINGS } from '@/lib/pot-index/registry'
 import { CompositionBar } from '@/components/pot-index/CompositionBar'
 import { ActivityFeed } from '@/components/pot-index/ActivityFeed'
+import { reportClientError } from '@/lib/pot-index/client-log'
 import { friendlyError } from '@/lib/pot-index/errors'
 import { DevnetFaucet } from '@/components/pot-index/DevnetFaucet'
 import { NavChart } from '@/components/pot-index/NavChart'
@@ -36,7 +40,7 @@ export default function PotPage() {
   const params = useParams<{ mint: string }>()
   const search = useSearchParams()
   const mint = params.mint
-  // Referral: first touch wins and is remembered per POTfolio for 30 days, so the referrer is still
+  // Referral: first touch wins and is remembered per POTFolio for 30 days, so the referrer is still
   // paid when the holder comes back later without the link.
   const [referrer, setReferrer] = useState<PublicKey | null>(null)
   useEffect(() => {
@@ -70,13 +74,16 @@ export default function PotPage() {
   const [tab, setTab] = useState<'deposit' | 'exit'>('deposit')
   const [amount, setAmount] = useState('100')
   const [exitPct, setExitPct] = useState(100)
-  const [exitMode, setExitMode] = useState<'assets' | 'usdc'>('assets')
+  const [exitMode, setExitMode] = useState<'assets' | 'usdc'>('usdc')
+  const position = useWalletPosition(pot.data)
+  const navHist = useNavHistory(pot.data?.indexMint.toBase58() ?? '', '7d')
+  const nav7d = navHist.data?.stats?.change7d ?? null
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string; sig?: string } | null>(null)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    if (pot.data) document.title = `${pot.data.name} ($${pot.data.symbol}) — PotBot`
+    if (pot.data) document.title = `${pot.data.name} ($${pot.data.symbol}) · PotBot`
   }, [pot.data])
 
   const amountNum = Number(amount) || 0
@@ -105,12 +112,25 @@ export default function PotPage() {
   const run = async (fn: () => Promise<string | string[]>, okText: string | ((r: string | string[]) => string)) => {
     setBusy(true)
     setMsg(null)
+    const id = toast.loading('Confirm in your wallet…')
+    const started = Date.now()
     try {
       const r = await fn()
       const sig = Array.isArray(r) ? r[r.length - 1] : r
-      setMsg({ ok: true, text: typeof okText === 'function' ? okText(r) : okText, sig })
+      const text = typeof okText === 'function' ? okText(r) : okText
+      setMsg({ ok: true, text, sig })
+      toast.success(
+        <span>
+          {text} <span className="opacity-70">· {((Date.now() - started) / 1000).toFixed(0)} s</span>
+          {sig && <a className="ml-1 underline" href={explorerTx(sig)} target="_blank" rel="noreferrer">tx ↗</a>}
+        </span>,
+        { id, duration: 7000 },
+      )
     } catch (e) {
-      setMsg({ ok: false, text: friendlyError(e, { devnet: POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' }) })
+      reportClientError('pot-page', e, { pot: mint, wallet: pubkey?.toBase58() })
+      const text = friendlyError(e, { devnet: POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' })
+      setMsg({ ok: false, text })
+      toast.error(text, { id, duration: 8000 })
     } finally {
       setBusy(false)
     }
@@ -130,7 +150,7 @@ export default function PotPage() {
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       {search.get('created') && (
         <div className="mb-6 rounded-xl border border-pot-green/40 bg-pot-green/10 px-4 py-3 text-sm text-white">
-          Your POTfolio is live. Share the link below: every deposit through it pays you the referral share.
+          Your POTFolio is live. Share the link below: every deposit through it pays you the referral share.
         </div>
       )}
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -149,17 +169,25 @@ export default function PotPage() {
             <p className="mt-1 text-sm text-white/70">
               by {p.creator.toBase58().slice(0, 4)}…{p.creator.toBase58().slice(-4)} · created{' '}
               {new Date(p.createdAt * 1000).toLocaleDateString()}
-              {stats.data && (() => {
-                const lvl = stageForUsd(stats.data.navUsd)
-                const next = STAGES[lvl] // undefined at level 6
-                return (
-                  <>
-                    {' '}· <span className="text-pot-green">Level {lvl} {STAGES[lvl - 1].name}</span>
-                    {next ? ` · next level at ${next.label}` : ' · max level'}
-                  </>
-                )
-              })()}
             </p>
+            {stats.data && (() => {
+              const lvl = stageForUsd(stats.data.navUsd)
+              const cur = STAGES[lvl - 1]
+              const next = STAGES[lvl] // undefined at level 6
+              const pct = next ? Math.min(100, ((stats.data.navUsd - cur.minUsd) / (next.minUsd - cur.minUsd)) * 100) : 100
+              return (
+                <div className="mt-3 max-w-md">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-pot-green">Level {lvl} · {cur.name}</span>
+                    <span className="text-white/60">{next ? `$${Math.max(0, next.minUsd - stats.data.navUsd).toLocaleString(undefined, { maximumFractionDigits: 0 })} to ${next.name} (${next.label})` : 'max level'}</span>
+                  </div>
+                  <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-pot-border">
+                    <div className="h-full rounded-full bg-gradient-to-r from-pot-green/60 to-pot-green" style={{ width: `${Math.max(3, pct)}%` }} />
+                  </div>
+                  <div className="mt-1 text-[11px] text-white/50">The plant grows with the money inside. Level is read from the chain and cannot be faked.</div>
+                </div>
+              )
+            })()}
           </header>
 
           <div className="grid grid-cols-3 gap-3">
@@ -168,20 +196,17 @@ export default function PotPage() {
             <Stat label="Supply" value={stats.data ? `${stats.data.supply.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${p.symbol}` : '—'} />
           </div>
 
-          <NavChart mint={p.indexMint.toBase58()} symbol={p.symbol} />
+          <NavChart mint={p.indexMint.toBase58()} symbol={p.symbol} entry={position.data && position.data.shares > 0 && position.data.costUsd > 0 ? position.data.costUsd / position.data.shares : null} />
 
           <div className="card p-5">
             <h2 className="mb-3 font-semibold text-white">Composition</h2>
-            <CompositionBar pot={p} actualUsd={stats.data?.legsUsd} cashUsd={stats.data ? stats.data.cash / 1e6 : undefined} />
-            <p className="mt-3 text-xs text-white/70">
-              Target weights are fixed. Deposits land as USDC cash; anyone can rebalance it into the basket within on-chain limits
-              (max {p.maxTradeBps / 100}% of NAV per trade, {p.slippageBps / 100}% slippage band).
-            </p>
+            <CompositionBar pot={p} actualUsd={stats.data?.legsUsd} cashUsd={stats.data ? stats.data.cash / 1e6 : undefined} legAmounts={stats.data?.legs} />
+            <p className="mt-3 text-xs text-white/50">Target weights. Hover a weight for what is in the Pot right now. New deposits arrive as USDC and keepers buy them into the basket; redemptions take every asset out pro rata.</p>
           </div>
 
-          <div className="card p-5 text-sm text-white/70">
-            <h2 className="mb-2 font-semibold text-white">How this POTfolio works</h2>
-            <ul className="list-disc space-y-1 pl-5">
+          <details className="card p-5 text-sm text-white/70">
+            <summary className="cursor-pointer select-none font-semibold text-white">How this POTFolio works</summary>
+            <ul className="mt-3 list-disc space-y-1 pl-5">
               <li>Deposit USDC → the Pot mints ${p.symbol} at the current NAV per token. Entry fee {ENTRY_FEE_BPS / 100}%.</li>
               <li>Redeem ${p.symbol} → you receive your share of every asset inside, in kind. {EXIT_FEE_BPS / 100}% stays for remaining holders.</li>
               <li>The index token is a normal SPL token: hold it, send it, trade it.</li>
@@ -192,13 +217,13 @@ export default function PotPage() {
               <a className="text-pot-green hover:underline" href={explorerAddress(p.indexMint.toBase58())} target="_blank" rel="noreferrer">Index mint ↗</a>
               <a className="text-pot-green hover:underline" href={explorerAddress(POT_INDEX_SETTINGS.programId)} target="_blank" rel="noreferrer">Program ↗</a>
             </p>
-          </div>
+          </details>
 
           <ActivityFeed pot={p} />
         </section>
 
         {/* Right: actions */}
-        <aside className="space-y-4">
+        <aside className="space-y-4 order-first lg:order-none">
           <div className="card p-5">
             <div className="mb-4 flex rounded-xl border border-pot-border bg-pot-dark p-1 text-sm font-semibold">
               {(['deposit', 'exit'] as const).map((t) => (
@@ -217,10 +242,11 @@ export default function PotPage() {
                   </span>
                   <input className="input" type="number" min={MIN_DEPOSIT_USDC} value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </label>
-                <div className="rounded-lg bg-pot-dark p-3 text-xs text-white/70">
-                  <div className="flex justify-between"><span>You receive (est.)</span><span className="text-white">{estShares.toFixed(4)} ${p.symbol}</span></div>
-                  <div className="flex justify-between"><span>Entry fee</span><span>{(amountNum * ENTRY_FEE_BPS / 10_000).toFixed(2)} USDC</span></div>
-                  {referrer && <div className="flex justify-between"><span>Referred by</span><span className="font-mono">{referrer.toBase58().slice(0, 4)}…{referrer.toBase58().slice(-4)}</span></div>}
+                <div className="rounded-xl bg-pot-dark p-4">
+                  <div className="text-xs text-white/70">You receive</div>
+                  <div className="mt-0.5 text-2xl font-black text-white">{estShares.toLocaleString(undefined, { maximumFractionDigits: 4 })} <span className="text-pot-green">${p.symbol}</span></div>
+                  <div className="mt-2 flex justify-between text-xs text-white/70"><span>Entry fee {ENTRY_FEE_BPS / 100}%</span><span>{(amountNum * ENTRY_FEE_BPS / 10_000).toFixed(2)} USDC</span></div>
+                  {referrer && <div className="flex justify-between text-xs text-white/70"><span>Referred by</span><span className="font-mono">{referrer.toBase58().slice(0, 4)}…{referrer.toBase58().slice(-4)}</span></div>}
                 </div>
                 {!connected ? (
                   <div className="[&>button]:!w-full [&>button]:!justify-center"><ConnectButton /></div>
@@ -245,7 +271,7 @@ export default function PotPage() {
                 {connected && myUsdc.data !== undefined && amountNum > myUsdc.data && (
                   <p className="text-xs text-yellow-200">You have {myUsdc.data.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC in this wallet.{POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' ? ' Get test USDC below.' : ''}</p>
                 )}
-                <p className="text-xs text-white/70">One wallet prompt: prices are posted, your tokens are minted at the current value, and the basket is bought in the same go. Min {MIN_DEPOSIT_USDC} USDC.</p>
+                <p className="text-xs text-white/70">One signature. Minted at live prices, the basket is bought right after. Min {MIN_DEPOSIT_USDC} USDC.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -256,14 +282,14 @@ export default function PotPage() {
                     onClick={() => setExitMode('assets')}
                     className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${exitMode === 'assets' ? 'bg-pot-green text-pot-dark' : 'text-white/70 hover:text-white'}`}
                   >
-                    Get the assets
+                    <span className="mr-1.5 inline-flex -space-x-1 align-middle"><span className="h-2.5 w-2.5 rounded-full bg-pot-green ring-1 ring-pot-dark" /><span className="h-2.5 w-2.5 rounded-full bg-violet-400 ring-1 ring-pot-dark" /><span className="h-2.5 w-2.5 rounded-full bg-sky-400 ring-1 ring-pot-dark" /></span>Get the assets
                   </button>
                   <button
                     type="button"
                     onClick={() => setExitMode('usdc')}
                     className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${exitMode === 'usdc' ? 'bg-pot-green text-pot-dark' : 'text-white/70 hover:text-white'}`}
                   >
-                    Get USDC
+                    <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full bg-sky-300 align-middle ring-1 ring-pot-dark" />Get USDC
                   </button>
                 </div>
 
@@ -295,22 +321,35 @@ export default function PotPage() {
                 </div>
 
                 {exitPreview && exitMode === 'assets' && (
-                  <div className="rounded-lg bg-pot-dark p-3 text-xs text-white/70">
-                    <p className="mb-1 text-white">You receive, every asset in kind:</p>
-                    {exitPreview.usdc > 0.005 && <div className="flex justify-between"><span>USDC (not yet bought in)</span><span>{exitPreview.usdc.toFixed(2)}</span></div>}
-                    {exitPreview.legs.map((l) => (
-                      <div key={l.symbol} className="flex justify-between"><span>{l.symbol}</span><span>{l.amount.toFixed(6)} (≈${l.usd.toFixed(2)})</span></div>
-                    ))}
+                  <div className="rounded-xl bg-pot-dark p-4">
+                    <div className="text-xs text-white/70">You receive, in your wallet</div>
+                    <div className="mt-0.5 text-2xl font-black text-white">≈ ${(exitPreview.usdc + exitPreview.legs.reduce((a, l) => a + l.usd, 0)).toFixed(2)} <span className="text-sm font-semibold text-white/70">in {exitPreview.legs.length + (exitPreview.usdc > 0.005 ? 1 : 0)} tokens</span></div>
+                    <div className="mt-2 space-y-1 text-xs text-white/70">
+                      {exitPreview.legs.map((l) => (
+                        <div key={l.symbol} className="flex justify-between"><span className="text-white">{l.symbol}</span><span>{l.amount.toLocaleString(undefined, { maximumFractionDigits: 6 })} <span className="text-white/50">≈ ${l.usd.toFixed(2)}</span></span></div>
+                      ))}
+                      {exitPreview.usdc > 0.005 && <div className="flex justify-between"><span className="text-white">USDC</span><span>{exitPreview.usdc.toFixed(2)}</span></div>}
+                    </div>
+                    <PnlLine position={position.data} shares={sharesInNum} valueUsd={exitPreview.usdc + exitPreview.legs.reduce((a, l) => a + l.usd, 0)} />
                   </div>
                 )}
-                {exitPreview && exitMode === 'usdc' && (
-                  <div className="rounded-lg bg-pot-dark p-3 text-xs text-white/70">
-                    <p className="mb-1 text-white">You receive USDC:</p>
-                    <div className="flex justify-between"><span>Your share, sold at market</span><span>≈ ${(exitPreview.usdc + exitPreview.legs.reduce((a, l) => a + l.usd, 0)).toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Conversion fee 0.10% (on the sold part)</span><span>−${(exitPreview.legs.reduce((a, l) => a + l.usd, 0) * 0.001).toFixed(2)}</span></div>
-                    <p className="mt-1">Sold in the same transaction. If the sale gives less than the on-chain minimum, nothing happens and you keep your tokens.{stalePrices ? ' Market closed: live prices needed, choose "Get the assets" meanwhile.' : ''}</p>
-                  </div>
-                )}
+                {exitPreview && exitMode === 'usdc' && (() => {
+                  const sold = exitPreview.legs.reduce((a, l) => a + l.usd, 0)
+                  const fee = sold * 0.001
+                  const net = exitPreview.usdc + sold - fee
+                  return (
+                    <div className="rounded-xl bg-pot-dark p-4">
+                      <div className="text-xs text-white/70">You receive, in your wallet</div>
+                      <div className="mt-0.5 text-2xl font-black text-white">≈ ${net.toFixed(2)} <span className="text-pot-green">USDC</span></div>
+                      <div className="mt-2 flex justify-between text-xs text-white/70"><span>Conversion fee 0.10%</span><span>−${fee.toFixed(2)}</span></div>
+                      <PnlLine position={position.data} shares={sharesInNum} valueUsd={net} />
+                      <details className="mt-2 text-xs text-white/60">
+                        <summary className="cursor-pointer select-none text-white/70">Details</summary>
+                        <p className="mt-1">Your share of every asset is sold at the live price in the same transaction. If the sale would give less than the on-chain minimum, nothing happens and you keep your tokens.{stalePrices ? ' Market closed: live prices needed, choose "Get the assets" meanwhile.' : ''}</p>
+                      </details>
+                    </div>
+                  )
+                })()}
                 {!connected ? (
                   <div className="[&>button]:!w-full [&>button]:!justify-center"><ConnectButton /></div>
                 ) : (
@@ -327,7 +366,7 @@ export default function PotPage() {
                   {busy ? 'Confirm in wallet…' : exitMode === 'usdc' ? `Redeem ${exitPct}% for USDC` : `Redeem ${exitPct}% for the assets`}
                 </button>
                 )}
-                <p className="text-xs text-white/70">Always available, no oracle, no pause. {EXIT_FEE_BPS / 100}% stays in the Pot for the holders who remain.</p>
+                <p className="text-xs text-white/70">One signature. Always available. {EXIT_FEE_BPS / 100}% stays in the Pot for the holders who remain.</p>
               </div>
             )}
 
@@ -344,7 +383,7 @@ export default function PotPage() {
             )}
           </div>
 
-          <PositionCard pot={p} sharesBase={myShares.data} indexPrice={stats.data?.indexPrice} connected={connected} />
+          <PositionCard pot={p} sharesBase={myShares.data} indexPrice={stats.data?.indexPrice} connected={connected} change7d={nav7d} />
 
           <div className="card p-5">
             <h3 className="font-semibold text-white">Share & earn</h3>
@@ -382,3 +421,19 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
+
+
+/** What this redemption realises against the wallet's average entry (cost basis from on-chain history). */
+function PnlLine({ position, shares, valueUsd }: { position: { shares: number; costUsd: number } | undefined; shares: number; valueUsd: number }) {
+  if (!position || position.shares <= 0 || shares <= 0) return null
+  const costOfPart = (position.costUsd / position.shares) * Math.min(shares, position.shares)
+  const pnl = valueUsd - costOfPart
+  const pct = costOfPart > 0 ? (pnl / costOfPart) * 100 : 0
+  const up = pnl >= 0
+  return (
+    <div className="mt-2 flex items-center justify-between rounded-lg bg-black/20 px-3 py-2 text-xs">
+      <span className="text-white/70">Since your entry (${costOfPart.toFixed(2)} in)</span>
+      <span className={`font-semibold ${up ? 'text-pot-green' : 'text-red-300'}`}>{up ? '+' : '−'}${Math.abs(pnl).toFixed(2)} ({up ? '+' : ''}{pct.toFixed(2)}%)</span>
+    </div>
+  )
+}

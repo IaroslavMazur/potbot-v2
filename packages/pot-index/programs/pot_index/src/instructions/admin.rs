@@ -107,6 +107,9 @@ pub struct RegisterAsset<'info> {
 }
 
 pub fn handle_register_asset(ctx: Context<RegisterAsset>, feed_id: [u8; 32]) -> Result<()> {
+    // The cash currency can never be a leg: its vault would be the Pot's cash vault and NAV / exit
+    // would count it twice. (Review F5.)
+    require_keys_neq!(ctx.accounts.mint.key(), ctx.accounts.config.usdc_mint, PotError::InvalidLeg);
     let a = &mut ctx.accounts.asset;
     a.mint = ctx.accounts.mint.key();
     a.feed_id = feed_id;

@@ -43,7 +43,7 @@ export default function NewPotPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    document.title = 'Create a POTfolio — PotBot'
+    document.title = 'Create a POTFolio · PotBot'
   }, [])
 
   const total = rows.reduce((s, r) => s + r.weight, 0)
@@ -71,7 +71,7 @@ export default function NewPotPage() {
         symbol: symbol.trim().toUpperCase(),
         legs: rows.map((r) => ({ mint: new PublicKey(r.mint), weightBps: r.weight * 100 })),
         depositCapUsd: 0,
-        slippageBps: 100,
+        slippageBps: 50,
         maxTradeBps: 1000,
         onGrind: setGrind,
       })
@@ -87,7 +87,7 @@ export default function NewPotPage() {
     <div className="potfolio-create mx-auto max-w-2xl px-4 py-10 sm:px-6">
       <PageHeader
         eyebrow="Create"
-        title="Create a POTfolio"
+        title="Create a POTFolio"
         lede="Pick up to 5 assets, set target weights, publish. You get an index token that anyone can mint by depositing USDC. Weights are locked at creation, so depositors know exactly what they are buying."
       />
 
@@ -260,7 +260,7 @@ export default function NewPotPage() {
           <div className="potfolio-create-wallet"><ConnectButton /></div>
         ) : (
           <button type="button" className="potfolio-create-action btn-primary w-full" disabled={!valid || busy} onClick={submit}>
-            {busy ? (grind > 0 ? 'Picking a Pot… address' : 'Creating…') : 'Create POTfolio'}
+            {busy ? (grind > 0 ? 'Picking a Pot… address' : 'Creating…') : 'Create POTFolio'}
           </button>
         )}
         <p className="text-xs text-white/60">Creating is one transaction and costs about 0.03 SOL in account rent. {POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' ? 'On devnet the faucet below also sends SOL to an empty wallet.' : ''}</p>

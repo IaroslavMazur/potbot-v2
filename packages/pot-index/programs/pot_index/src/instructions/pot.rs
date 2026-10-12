@@ -232,3 +232,55 @@ pub fn handle_set_index_metadata(ctx: Context<SetIndexMetadata>, uri: String) ->
     )?;
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// update_index_metadata: the creator can repoint the token's metadata URI (logo, description,
+// thesis). Name and symbol stay what the Pot was created with; the Pot PDA remains the update
+// authority. (Review F14.)
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+pub struct UpdateIndexMetadata<'info> {
+    pub creator: Signer<'info>,
+    #[account(
+        seeds = [POT_SEED, pot.index_mint.as_ref()],
+        bump = pot.bump,
+        has_one = creator @ PotError::Unauthorized,
+    )]
+    pub pot: Account<'info, Pot>,
+    /// CHECK: PDA derived and validated by the Token Metadata program in the CPI; the program also
+    /// checks that `pot` is the update authority recorded in it.
+    #[account(mut)]
+    pub metadata: UncheckedAccount<'info>,
+    pub token_metadata_program: Program<'info, Metadata>,
+}
+
+pub fn handle_update_index_metadata(ctx: Context<UpdateIndexMetadata>, uri: String) -> Result<()> {
+    require!(uri.len() <= 200, PotError::NameTooLong);
+    let pot = &ctx.accounts.pot;
+    let seeds = pot.seeds();
+    let signer: &[&[&[u8]]] = &[&seeds];
+    anchor_spl::metadata::update_metadata_accounts_v2(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_metadata_program.key(),
+            anchor_spl::metadata::UpdateMetadataAccountsV2 {
+                metadata: ctx.accounts.metadata.to_account_info(),
+                update_authority: pot.to_account_info(),
+            },
+            signer,
+        ),
+        None,
+        Some(anchor_spl::metadata::mpl_token_metadata::types::DataV2 {
+            name: pot.name.clone(),
+            symbol: pot.symbol.clone(),
+            uri,
+            seller_fee_basis_points: 0,
+            creators: None,
+            collection: None,
+            uses: None,
+        }),
+        None,
+        Some(true),
+    )?;
+    Ok(())
+}

@@ -27,7 +27,7 @@ export function FeeCalculator() {
       <p className="mt-1 text-xs text-white/70">Move the numbers. Everything is paid inside the deposit transaction; nothing to claim.</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block text-xs text-white/70">
-          <span className="flex justify-between"><span>Deposits into your POTfolio per month</span><span className="text-white">{usd(monthly)}</span></span>
+          <span className="flex justify-between"><span>Deposits into your POTFolio per month</span><span className="text-white">{usd(monthly)}</span></span>
           <input type="range" className="pot-range mt-2 w-full" style={{ ['--pct' as string]: `${((monthly - 1000) / 999_000) * 100}%` }} min={1000} max={1_000_000} step={1000} value={monthly} onChange={(e) => setMonthly(Number(e.target.value))} />
         </label>
         <label className="block text-xs text-white/70">

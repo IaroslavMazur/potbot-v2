@@ -215,7 +215,7 @@ export async function buildCreatePot(
   args: CreatePotArgs,
   opts: { indexMint?: Keypair; onGrind?: (tries: number) => void } = {},
 ): Promise<{ indexMint: Keypair; instructions: TransactionInstruction[] }> {
-  // Vanity mint: every POTfolio token address starts with "Pot".
+  // Vanity mint: every POTFolio token address starts with "Pot".
   const indexMint = opts.indexMint ?? (await grindKeypair(INDEX_MINT_PREFIX, { onProgress: opts.onGrind }))
   const pot = potPda(indexMint.publicKey)
   const sum = args.legs.reduce((s, l) => s + l.weightBps, 0)
@@ -283,6 +283,19 @@ export async function buildSetIndexMetadata(program: Program, creator: PublicKey
       tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
+    })
+    .instruction()
+}
+
+/** Creator-only: repoint the index token's metadata URI (logo, description, thesis). */
+export async function buildUpdateIndexMetadata(program: Program, creator: PublicKey, indexMint: PublicKey, uri: string) {
+  return program.methods
+    .updateIndexMetadata(uri)
+    .accounts({
+      creator,
+      pot: potPda(indexMint),
+      metadata: metadataPda(indexMint),
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
     })
     .instruction()
 }

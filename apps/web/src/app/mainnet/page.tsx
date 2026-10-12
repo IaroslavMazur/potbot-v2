@@ -4,8 +4,8 @@ import { POT_INDEX_SETTINGS } from '@/lib/pot-index/registry'
 import { PageHeader } from '@/components/PageHeader'
 
 export const metadata: Metadata = {
-  title: 'Mainnet | PotBot POTfolio',
-  description: 'What changes when PotBot POTfolio goes live on Solana mainnet: real assets, any token with a price feed, Jupiter keepers, guarded launch with caps and a multisig.',
+  title: 'Mainnet plan',
+  description: 'What changes when PotBot POTFolio goes live on Solana mainnet: real assets, any token with a price feed, Jupiter keepers, guarded launch with caps and a multisig.',
 }
 
 const isMainnet = POT_INDEX_SETTINGS.cluster === 'mainnet-beta'
@@ -16,7 +16,7 @@ export default function MainnetPage() {
       <PageHeader
         eyebrow="Mainnet"
         title="From devnet to real money"
-        lede="POTfolio runs on Solana devnet today: test tokens, real Pyth prices, every transaction public. This page is what changes when the same program goes live on mainnet, and what stays limited on purpose at the start."
+        lede="POTFolio runs on Solana devnet today: test tokens, real Pyth prices, every transaction public. This page is what changes when the same program goes live on mainnet, and what stays limited on purpose at the start."
         className="mb-6"
       />
 
@@ -48,9 +48,9 @@ export default function MainnetPage() {
 
       <Section title="What stays limited at launch, on purpose">
         <ul className="list-disc space-y-2 pl-5">
-          <li><b className="text-white">One flagship POTfolio</b> with a hard cap on total size. More baskets open as the cap fills without incident.</li>
+          <li><b className="text-white">One flagship POTFolio</b> with a hard cap on total size. More baskets open as the cap fills without incident.</li>
           <li><b className="text-white">Up to 5 assets per basket</b>, 10 next.</li>
-          <li><b className="text-white">Fixed weights only.</b> Managed and Community POTfolios come after an audit.</li>
+          <li><b className="text-white">Fixed weights only.</b> Managed and Community POTFolios come after an audit.</li>
           <li><b className="text-white">Beta.</b> The program is tested and reviewed, not yet audited by a third party. Do not deposit what you are not ready to lose.</li>
         </ul>
       </Section>
@@ -61,7 +61,7 @@ export default function MainnetPage() {
           <li><b className="text-white">Exit always works.</b> Redeeming the token needs no oracle, no keeper and no permission. It cannot be paused.</li>
           <li><b className="text-white">Keepers are boxed in.</b> Only toward the target weights, max 25% of the basket per trade, price inside the Pyth band, under-delivery reverts the whole transaction.</li>
           <li><b className="text-white">Upgrades need two people.</b> The program upgrade authority and protocol admin sit in a Squads multisig (2 of 3), not in one wallet.</li>
-          <li><b className="text-white">Everything is public.</b> Program source on GitHub, every deposit, trade and exit on Explorer, the activity feed on each POTfolio page.</li>
+          <li><b className="text-white">Everything is public.</b> Program source on GitHub, every deposit, trade and exit on Explorer, the activity feed on each POTFolio page.</li>
         </ul>
       </Section>
 
@@ -70,7 +70,7 @@ export default function MainnetPage() {
           <li>Security pass against the Solana Foundation checklist, tests green.</li>
           <li>Jupiter keeper live on devnet with real routes.</li>
           <li>Program deployed to mainnet, verified on Explorer, authority moved to the multisig.</li>
-          <li>Flagship POTfolio created with a cap, first deposit, first rebalance and first exit published with links.</li>
+          <li>Flagship POTFolio created with a cap, first deposit, first rebalance and first exit published with links.</li>
           <li>Third-party audit, then caps lift and creator access opens.</li>
         </ol>
       </Section>
@@ -78,7 +78,7 @@ export default function MainnetPage() {
       <Section title="Want in?">
         <p>
           Creators who want a basket on mainnet at launch and holders who want early access: join the waitlist. Testers: devnet is open
-          now, test USDC from the faucet on any POTfolio page.
+          now, test USDC from the faucet on any POTFolio page.
         </p>
         <div className="flex flex-wrap gap-3">
           <Link href="/signup" className="btn-primary">Join the mainnet waitlist</Link>

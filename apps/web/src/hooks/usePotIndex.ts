@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react'
-import { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import type { Wallet } from '@coral-xyz/anchor'
 import { usePrivyAnchorWallet } from '@/hooks/usePrivyAnchorWallet'
 import {
@@ -24,10 +24,32 @@ import {
   type CreatePotArgs,
   type PotView,
 } from '@/lib/pot-index/client'
-import { buildWithPythUpdates, fetchHermesPrices } from '@/lib/pot-index/pyth-post'
+import { fetchHermesPrices } from '@/lib/pot-index/pyth-post'
 import { POT_INDEX_ASSETS, POT_INDEX_SETTINGS, assetByMint } from '@/lib/pot-index/registry'
+import { reportClientError } from '@/lib/pot-index/client-log'
 
 /** Signer-aware program + wallet (wallet-adapter or Privy). */
+/** A signed bundle is only good while its blockhash lives (~60 s) and, for anything that posts a
+ *  Pyth price, while the price is within the program's window (60 s). If the wallet prompt took
+ *  longer than that, send would fail with "blockhash not found" / PriceTooOld. Check before sending. */
+const BUNDLE_MAX_AGE_MS = 40_000
+async function bundleStillFresh(_connection: Connection, _first: VersionedTransaction, builtAt: number): Promise<boolean> {
+  return Date.now() - builtAt <= BUNDLE_MAX_AGE_MS
+}
+function withStage<T>(stage: string, p: Promise<T>): Promise<T> {
+  return p.catch((e: unknown) => {
+    const err = (e instanceof Error ? e : new Error(String(e))) as Error & { stage?: string }
+    if (!err.stage) err.stage = stage
+    throw err
+  })
+}
+/** Give the operator its Pyth rent back once a session is over. Fire and forget. */
+function releasePrices(accounts: string[]) {
+  if (!accounts.length) return
+  void fetch('/api/pot-index/cleanup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accounts }), keepalive: true }).catch(() => {})
+}
+const TOOK_TOO_LONG = 'The wallet prompt took longer than a minute, so the prices in this bundle expired. Nothing changed. Confirm again, within a minute this time.'
+
 export function usePotIndexProgram() {
   const { connection } = useConnection()
   const adapter = useAnchorWallet()
@@ -252,8 +274,10 @@ export function usePotIndexActions() {
   const sendLegacy = useCallback(
     async (ixs: Transaction['instructions'], extraSigners: { publicKey: PublicKey; secretKey: Uint8Array }[] = []) => {
       if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      // 'finalized' blockhash: wallets simulate against their own RPC, which may lag a 'confirmed'
-      // hash by a few slots and reject it with "Blockhash not found".
+      // 'finalized' blockhash everywhere the wallet signs: wallets simulate against their own RPC,
+      // which may lag a 'confirmed' hash by a few slots, spin on "Blockhash not found" and then the
+      // hash is expired by the time the holder confirms. Finalized costs ~13 s of validity and is
+      // known to every node.
       const attempt = async () => {
         const tx = new Transaction().add(...ixs)
         tx.feePayer = pubkey
@@ -280,7 +304,8 @@ export function usePotIndexActions() {
       if (!program || !pubkey) throw new Error('Connect a wallet first')
       const { indexMint, instructions } = await buildCreatePot(program, pubkey, new PublicKey(POT_INDEX_SETTINGS.usdcMint), args, { onGrind: args.onGrind })
       // create + legs + finalize: keep legs ≤ 3 in one tx, otherwise split finalize off.
-      const metaUri = `${window.location.origin}/api/pot-index/meta/${indexMint.publicKey.toBase58()}`
+      // Canonical origin, never the deployment the creator happened to use (preview URLs are garbage-collected).
+      const metaUri = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://potbot.fun'}/api/pot-index/meta/${indexMint.publicKey.toBase58()}`
       const metadata = await buildSetIndexMetadata(program, pubkey, indexMint.publicKey, metaUri)
       const sigs: string[] = []
       if (args.legs.length <= 3) {
@@ -298,115 +323,71 @@ export function usePotIndexActions() {
     [program, pubkey, sendLegacy],
   )
 
-  const deposit = useCallback(
-    async (pot: PotView, amountUsdc: number, referrer: PublicKey | null, minSharesOut = 0, opts: { allocate?: boolean } = {}) => {
-      if (!program || !wallet || !pubkey) throw new Error('Connect a wallet first')
-      const feeds = pot.legs.map((l) => l.feedId)
-      const txs = await buildWithPythUpdates(connection, wallet, feeds, (priceUpdates) =>
-        buildDeposit(program, {
-          pot,
-          user: pubkey,
-          usdcMint: new PublicKey(POT_INDEX_SETTINGS.usdcMint),
-          treasury: new PublicKey(POT_INDEX_SETTINGS.treasury),
-          amountUsdc,
-          minSharesOut,
-          referrer,
-          priceUpdates,
-        }),
-      )
-      // One wallet prompt for the whole bundle (post prices → deposit → refund rent): fresh blockhash
-      // on every tx right before signing, sign all at once, then send strictly in order.
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
-      const vtxs = txs.map(({ tx }) => {
-        const v = tx as VersionedTransaction
-        v.message.recentBlockhash = blockhash
-        return v
-      })
-      txs.forEach(({ signers }, i) => {
-        if (signers.length) vtxs[i].sign(signers as never[])
-      })
-
-      // Deposit and allocate: buy the basket right after the deposit, in the same prompt. Best effort:
-      // if the planner is unavailable (stale prices, market closed) the deposit still goes through
-      // and keepers allocate later.
-      let allocTxs: VersionedTransaction[] = []
-      let allocated = 0
-      if (opts.allocate !== false) {
-        try {
-          const res = await fetch('/api/pot-index/allocate', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              wallet: pubkey.toBase58(),
-              mint: pot.indexMint.toBase58(),
-              depositNetUsdc: Math.floor(amountUsdc * 1e6 * (1 - ENTRY_FEE_BPS / 10_000)),
-            }),
-          })
-          const data = (await res.json()) as { txs?: string[]; plan?: unknown[] }
-          if (res.ok && data.txs?.length) {
-            allocTxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-            allocated = data.plan?.length ?? 0
-          }
-        } catch {
-          /* deposit only */
+  /**
+   * One signature per action. The server builds the transaction on a durable nonce (it does not
+   * expire while the wallet prompt is open), the holder signs it, the server refreshes the Pyth
+   * prices, co-signs and submits. See operator.server.ts.
+   */
+  const viaOperator = useCallback(
+    async (kind: 'deposit' | 'exit' | 'exit-usdc', body: Record<string, unknown>) => {
+      if (!wallet || !pubkey) throw new Error('Connect a wallet first')
+      // Two attempts: if the wallet prompt outlived the blockhash, rebuild once and ask again.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const t0 = Date.now()
+        const br = await withStage(`${kind}:build`, fetch('/api/pot-index/tx/prepare', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ kind, wallet: pubkey.toBase58(), ...body }),
+        }))
+        const built = (await br.json()) as { ok?: boolean; tx?: string; token?: string; error?: string; payUsdc?: string }
+        if (!br.ok || !built.tx || !built.token) throw new Error(built.error ?? 'could not build the transaction')
+        const tx = VersionedTransaction.deserialize(Buffer.from(built.tx, 'base64'))
+        const t1 = Date.now()
+        const signed = (await withStage(`${kind}:sign`, wallet.signTransaction(tx))) as VersionedTransaction
+        const t2 = Date.now()
+        const sr = await withStage(`${kind}:submit`, fetch('/api/pot-index/tx/submit', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tx: Buffer.from(signed.serialize()).toString('base64'), token: built.token, timing: { prepareMs: t1 - t0, walletMs: t2 - t1, attempt } }),
+        }))
+        const res = (await sr.json()) as { ok?: boolean; sig?: string; allocated?: string[]; error?: string; expired?: boolean }
+        if (sr.ok && res.sig) {
+          await invalidate()
+          return res
         }
+        if (res.expired && attempt === 0) {
+          reportClientError(`${kind}:expired`, new Error(`wallet took ${((t2 - t1) / 1000).toFixed(0)} s`), { prepareMs: t1 - t0, walletMs: t2 - t1 })
+          continue
+        }
+        throw new Error(res.error ?? 'the transaction was not accepted')
       }
-
-      const all = [...vtxs, ...allocTxs]
-      const signed = wallet.signAllTransactions
-        ? ((await wallet.signAllTransactions(all)) as VersionedTransaction[])
-        : await Promise.all(all.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction))
-      const sigs: string[] = []
-      for (let i = 0; i < signed.length; i++) {
-        const v = signed[i]
-        const sig = await connection.sendRawTransaction(v.serialize(), { maxRetries: 5 })
-        if (i < vtxs.length) await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
-        else await connection.confirmTransaction(sig, 'confirmed')
-        sigs.push(sig)
-      }
-      await invalidate()
-      return Object.assign(sigs, { allocated })
+      throw new Error('That signature took longer than the network allows. Nothing changed.')
     },
-    [program, wallet, pubkey, connection],
+    [wallet, pubkey],
+  )
+
+  const deposit = useCallback(
+    async (pot: PotView, amountUsdc: number, referrer: PublicKey | null, _minSharesOut = 0, _opts: { allocate?: boolean } = {}) => {
+      const res = await viaOperator('deposit', { mint: pot.indexMint.toBase58(), amountUsdc, referrer: referrer?.toBase58() ?? null })
+      return Object.assign([res.sig!, ...(res.allocated ?? [])], { allocated: res.allocated?.length ?? 0 })
+    },
+    [viaOperator],
   )
 
   const exit = useCallback(
     async (pot: PotView, shares: number) => {
-      if (!program || !pubkey) throw new Error('Connect a wallet first')
-      const ixs = await buildExit(program, { pot, user: pubkey, usdcMint: new PublicKey(POT_INDEX_SETTINGS.usdcMint), shares })
-      const sig = await sendLegacy(ixs)
-      await invalidate()
-      return sig
+      const res = await viaOperator('exit', { mint: pot.indexMint.toBase58(), shares })
+      return res.sig!
     },
-    [program, pubkey, sendLegacy],
+    [viaOperator],
   )
 
-  /** Exit straight to USDC. Devnet: the server builds the bundle with the market maker's fill
-   *  (program enforces the minimum on-chain); the holder signs everything in one prompt. */
   const exitUsdc = useCallback(
     async (pot: PotView, shares: number) => {
-      if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      const res = await fetch('/api/pot-index/exit-usdc', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares) }),
-      })
-      const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string }
-      if (!res.ok || !data.txs) throw new Error(data.error ?? 'market maker unavailable')
-      const vtxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-      const signed = wallet.signAllTransactions
-        ? ((await wallet.signAllTransactions(vtxs)) as VersionedTransaction[])
-        : await Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction))
-      const sigs: string[] = []
-      for (const v of signed) {
-        const sig = await connection.sendRawTransaction(v.serialize(), { maxRetries: 5 })
-        await connection.confirmTransaction(sig, 'confirmed')
-        sigs.push(sig)
-      }
-      await invalidate()
-      return sigs
+      const res = await viaOperator('exit-usdc', { mint: pot.indexMint.toBase58(), shares: String(shares) })
+      return [res.sig!]
     },
-    [wallet, pubkey, connection],
+    [viaOperator],
   )
 
   return { createPot, deposit, exit, exitUsdc, connected: !!pubkey, pubkey }

@@ -72,11 +72,11 @@ export function GardenMode({ series: fixed }: { series?: PlantSeries }) {
             <span className="h-px w-6 bg-gradient-to-l from-transparent to-pot-green/60" />
           </div>
           <h2 className="mb-4 text-3xl font-bold leading-[1.15] tracking-tight text-white sm:text-5xl">
-            Watch your POTfolio{' '}
+            Watch your POTFolio{' '}
             <span className="bg-gradient-to-r from-pot-green to-pot-accent bg-clip-text text-transparent">grow.</span>
           </h2>
           <p className="mx-auto max-w-2xl text-base leading-relaxed text-white/80 sm:text-lg">
-            Every POTfolio is a plant. Deposits water it, exits dry it out. The level comes from on-chain value, so it cannot be faked.
+            Every POTFolio is a plant. Deposits water it, exits dry it out. The level comes from on-chain value, so it cannot be faked.
           </p>
         </div>
 

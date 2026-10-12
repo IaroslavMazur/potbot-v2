@@ -3,7 +3,7 @@
 import { STAGES, plantSrc, potSeries, stageForUsd } from '@/lib/pot-index/garden'
 import type { PotView } from '@/lib/pot-index/client'
 
-/** Small plant next to a POTfolio's name: stage is derived from the value held in the Pot. */
+/** Small plant next to a POTFolio's name: stage is derived from the value held in the Pot. */
 export function PlantBadge({ pot, navUsd, size = 44 }: { pot: PotView; navUsd?: number; size?: number }) {
   const stage = stageForUsd(navUsd ?? 0)
   const st = STAGES[stage - 1]

@@ -7,42 +7,26 @@ import { OnboardingTutorial } from '@/components/OnboardingTutorial'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'PotBot — Group Trading Vaults on Solana',
-  description: 'Pool funds, vote on swaps, withdraw any time. Trustless group treasury management on Solana.',
+  title: { default: 'PotBot POTFolio: any basket of Solana assets as one liquid token', template: '%s · PotBot' },
+  description: 'Create a portfolio, hold the token. Deposit USDC, get one token that mirrors the whole basket, redeem any time for the assets or USDC. Nobody can withdraw the assets.',
   metadataBase: new URL('https://potbot.fun'),
   alternates: { canonical: '/' },
   openGraph: {
-    title: 'PotBot — Group Trading Vaults on Solana',
-    description: 'Pool funds, vote on swaps, withdraw any time. Trustless group treasury management on Solana.',
+    title: 'PotBot POTFolio: any basket of Solana assets as one liquid token',
+    description: 'Create a portfolio, hold the token. Exit any time, in assets or USDC. Live on Solana devnet.',
     url: 'https://potbot.fun',
     siteName: 'PotBot',
     type: 'website',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'PotBot — Group Trading Vaults on Solana',
-      },
-    ],
   },
   twitter: {
     card: 'summary_large_image',
     site: '@PotBot_sol',
-    creator: '@PotBot_sol',
-    title: 'PotBot — Group Trading Vaults on Solana',
-    description: 'Pool funds, vote on swaps, withdraw any time. Trustless group treasury management on Solana.',
-    images: ['/og-image.png'],
+    creator: '@CryptoYDao',
+    title: 'PotBot POTFolio: any basket of Solana assets as one liquid token',
+    description: 'Create a portfolio, hold the token. Exit any time, in assets or USDC. Live on Solana devnet.',
   },
   manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'PotBot',
-  },
-  icons: {
-    apple: '/og-image.png',
-  },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'PotBot' },
 }
 
 // Next.js 14 moved viewport + themeColor out of `metadata` into a
@@ -82,8 +66,8 @@ const FOOTER_COLUMNS: { title: string; links: { label: string; href: string; ext
   {
     title: 'Product',
     links: [
-      { label: 'POTfolios', href: '/portfolios' },
-      { label: 'Create a POTfolio', href: '/portfolios/new' },
+      { label: 'POTFolios', href: '/portfolios' },
+      { label: 'Create a POTFolio', href: '/portfolios/new' },
       { label: 'How it works', href: '/learn' },
       { label: 'FAQ', href: '/faq' },
     ],

@@ -37,6 +37,7 @@ Scripts: `scripts/pot-index-operator-flow.ts deposit|exit|exit-usdc|faucet` driv
 | Oct 8 | v1.0 | 509477021 (last of several same-day upgrades) | 14 instructions, first security pass |
 | Oct 10 | v1.0.x | | exit to USDC, deposit-and-allocate, second review fixes |
 | Oct 12 | v1.1 | 510076099 | review F1/F5/F7/F14; `max_price_age_secs` set to 30, then 60 after a browser-wallet test (the holder has to sign a 7-tx bundle inside the window); showcase metadata repointed to potbot.fun; sig `3f5ucfuXJSUwtWMR24La9XtAKznpCWvRZ9gMuGJhNonNJ6KUXPVfowhZQ72ShjDFKfX5k6u42ryerAeFTLX889kZ` |
+| Oct 12 | v1.2 | 510340077 | new address `7bULMGNu443EVE48Cmfp42rvAaW2CJbKLv8fsPZBSRsV` (v1.1 stays at `DfKK…` as a backup); review follow-ups (#96): upgrade-authority `init_config`, pinned USDC, admin expiry and events, feed checks, `update_asset`, freezable mints refused, last holder fee-free, `total_exits_usd` removed; upgrade authority handed to `JHV4qhTEhEKMkugYXuPURzwunYBiCUVji9ZrRiA5rvG`; binary sha256 `4b8f79b03b6a0aedf670ad88086a082c1120dc93691ceb999d3077d5c729ad43`; sig `5oovzxQvkUKSHgx93f7JBAbUs3CBL5UV4Jgx9sbehHX2uZKAqrMiauSXKowXJtM2z8xtJrJgXesYuzm4D2bYJuah` |
 
 Deployer balance and keys stay out of git. Mainnet: see `apps/web/src/app/mainnet` and `docs/operations/deploy.md`.
 

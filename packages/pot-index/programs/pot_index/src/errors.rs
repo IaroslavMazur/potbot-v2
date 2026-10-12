@@ -106,4 +106,6 @@ pub enum PotError {
     NotUpgradeAuthority, // 6050
     #[msg("Mint has a freeze authority; v1 does not list freezable assets")]
     FreezableMint,
+    #[msg("Amount exceeds the vault balance")]
+    InsufficientVaultBalance,
 }

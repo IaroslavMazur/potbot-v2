@@ -316,10 +316,10 @@ fn open_needs_an_amount_and_its_own_close() {
     let v = vec![open_ix(&w, &k, 0, 1, 0), close_ix(&w, &k, 1)];
     let err = send(&mut w.svm, &v, &w.keeper, &[]).unwrap_err();
     assert!(err.contains("ZeroAmount"), "{err}");
-    // More than the vault holds is refused with the same error.
+    // More than the vault holds.
     let v = vec![open_ix(&w, &k, 0, 1, 4_000_000_001), close_ix(&w, &k, 1)];
     let err = send(&mut w.svm, &v, &w.keeper, &[]).unwrap_err();
-    assert!(err.contains("ZeroAmount"), "{err}");
+    assert!(err.contains("InsufficientVaultBalance"), "{err}");
     // Two opens before a close: the first open finds the second one where its close must be.
     // `RebalanceOpen` itself is only reachable through a CPI from another program, which the
     // instructions-sysvar walk does not see.

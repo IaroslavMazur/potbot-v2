@@ -1920,6 +1920,11 @@
       "code": 6051,
       "name": "FreezableMint",
       "msg": "Mint has a freeze authority; v1 does not list freezable assets"
+    },
+    {
+      "code": 6052,
+      "name": "InsufficientVaultBalance",
+      "msg": "Amount exceeds the vault balance"
     }
   ],
   "types": [

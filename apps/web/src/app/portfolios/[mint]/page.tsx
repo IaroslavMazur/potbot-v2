@@ -223,7 +223,7 @@ export default function PotPage() {
         </section>
 
         {/* Right: actions */}
-        <aside className="space-y-4">
+        <aside className="space-y-4 order-first lg:order-none">
           <div className="card p-5">
             <div className="mb-4 flex rounded-xl border border-pot-border bg-pot-dark p-1 text-sm font-semibold">
               {(['deposit', 'exit'] as const).map((t) => (

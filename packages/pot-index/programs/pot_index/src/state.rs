@@ -84,10 +84,6 @@ pub struct Pot {
     pub last_rebalance_slot: u64,
     /// USDC deposited, net of the entry fee. Statistics only: nothing in the program reads it.
     pub total_deposits_usd: u64,
-    /// Unused; was `total_exits_usd`, which counted only the USDC part of exits (legs paid in kind
-    /// have no price on the exit path), so it said little about what left the Pot. Kept as 8 bytes
-    /// of padding so existing Pot accounts keep their layout; Pots created from now on hold 0.
-    pub reserved: u64,
     pub created_at: i64,
     pub bump: u8,
 }

@@ -77,7 +77,6 @@ pub fn handle_create_pot(ctx: Context<CreatePot>, p: CreatePotParams) -> Result<
     pot.rebalance = RebalanceState::default();
     pot.last_rebalance_slot = 0;
     pot.total_deposits_usd = 0;
-    pot.reserved = 0;
     pot.created_at = Clock::get()?.unix_timestamp;
     pot.bump = ctx.bumps.pot;
 

@@ -50,16 +50,28 @@ Deployer balance and keys stay out of git. Mainnet: see `apps/web/src/app/mainne
 - Mints with a freeze authority cannot be registered (F8, enforced in `register_asset`); freezable assets need a separate product (see security.md).
 - Token metadata JSON and images on the production domain or Arweave; Token-2022 metadata at the migration (F14).
 
-## Upgrading a v1.1 deployment (Config migration)
-v1.2 appends `pending_admin_expiry_slot` to `Config` (154 → 162 bytes). The new program cannot load the old account, so the upgrade and the migration go back to back:
+## Deploying v1.2 on devnet
+v1.2 changes two account layouts: `Config` gains `pending_admin_expiry_slot` (154 → 162 bytes) and `Pot` loses `total_exits_usd` (see decisions.md). The binary also grows from ~501 KB to ~578 KB. Devnet has no real users, so v1.2 goes live now rather than after a migration period; the choice is only where.
 
-1. `anchor build` (devnet: default features). `apps/web/src/lib/pot-index/idl.json` in this release already matches the program; copy `target/idl/pot_index.json` over it again only if the program changes.
-2. The binary grew from ~501 KB to ~578 KB, past the 503,416 bytes the v1.1 program account holds: extend it first, `solana program extend DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr 80000` (~0.56 SOL of rent), unless your CLI extends automatically. Then upgrade (`anchor upgrade` or `solana program deploy --program-id …`).
-3. Immediately: `cd apps/web && npx tsx scripts/pot-index-set-config.ts migrate` with the admin keypair. `migrate_config` checks the account's owner, discriminator, old size and admin, tops up rent and grows the account in place; the old fields keep their offsets and the new one reads 0. Until it runs, every instruction that loads `Config` fails: deposits, rebalances, exit to USDC, admin. In-kind `exit` does not load `Config` and keeps working throughout.
-4. Check: `pot-index-set-config.ts show` prints the same admin, treasury and price age as before; `solana account <config PDA>` shows 162 bytes. A second `migrate` fails with `ConfigAlreadyMigrated`.
-5. An admin proposal made before the upgrade is void after it (its expiry reads 0): propose again.
-6. Client changes in the same release: `set_asset_enabled` is now `update_asset({ enabled, feedId })`; `register_asset` and a feed change in `update_asset` take a `priceUpdate` account (post the price in the same transaction, as `pot-index-devnet-init.ts` does).
-7. Once every deployment is migrated, delete `migrate_config`; a fresh deployment initializes in the current layout and never needs it.
+### Recommended: a new program address, v1.1 kept as a backup
+`DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` keeps running v1.1 untouched, with its Pots and their funds, so the build that was judged stays verifiable and nothing has to be migrated.
+
+1. Back up `packages/pot-index/target/deploy/pot_index-keypair.json`, then create a new program keypair in its place (`solana-keygen new -o target/deploy/pot_index-keypair.json`) and run `anchor keys sync` (updates `declare_id!` and `Anchor.toml`).
+2. `anchor build` (devnet: default features), then copy `target/idl/pot_index.json` to `apps/web/src/lib/pot-index/idl.json`: the IDL carries the program address, and the web app reads it from there unless `NEXT_PUBLIC_POT_INDEX_PROGRAM_ID` is set.
+3. `anchor deploy --provider.cluster devnet`. The deployer becomes the upgrade authority, and only it can call `init_config`.
+4. `cd apps/web && npx tsx scripts/pot-index-devnet-init.ts` with `POT_INDEX_ADMIN_KEYPAIR` set to the deployer key: initializes `Config` with the pinned devnet USDC, registers the assets (posting a Pyth price for each), creates the showcase Pots and rewrites `assets.devnet.json`. Test mints are reused from the existing `assets.devnet.json`.
+5. Set the live price window: `npx tsx scripts/pot-index-set-config.ts price-age 30`.
+6. `migrate_config` is not needed on a fresh address.
+
+### Alternative: upgrade `DfKK…` in place
+1. Exit every Pot first (operator and test wallets): `Pot` lost a field, so after the upgrade the program can no longer read any existing Pot, and whatever is still inside stays there.
+2. `anchor build`; the committed `idl.json` already matches this address.
+3. Extend the program account, which holds 503,416 bytes: `solana program extend DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr 80000` (~0.56 SOL of rent), unless your CLI extends automatically. Then upgrade (`anchor upgrade` or `solana program deploy --program-id …`).
+4. Immediately: `npx tsx scripts/pot-index-set-config.ts migrate` with the admin keypair. `migrate_config` checks the account's owner, discriminator, old size and admin, tops up rent and grows `Config` in place; the old fields keep their offsets and the new one reads 0. Until it runs, every instruction that loads `Config` fails.
+5. Check: `pot-index-set-config.ts show` prints the same admin, treasury and price age; a second `migrate` fails with `ConfigAlreadyMigrated`. An admin proposal made before the upgrade is void (its expiry reads 0).
+6. Re-create the showcase Pots (`pot-index-devnet-init.ts`).
+
+Either way, client changes in this release: `set_asset_enabled` is now `update_asset({ enabled, feedId })`; `register_asset` and a feed change in `update_asset` take a `priceUpdate` account. Once no deployment needs it, delete `migrate_config`.
 
 ## Known devnet limits
 Free Pyth tier: SOL, BTC, ETH, BNB, XRP, DOGE, JitoSOL, PYTH, USDC, TSLA, QQQ only. Equity feeds stop on weekends: deposits into stock Pots fail with `StalePrice` until market open; exits work. Public devnet RPC rate-limits: activity fetch is chunked and refetched every 45 to 90 s.

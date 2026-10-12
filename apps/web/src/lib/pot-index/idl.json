@@ -2455,15 +2455,6 @@
             "type": "u64"
           },
           {
-            "name": "reserved",
-            "docs": [
-              "Unused; was `total_exits_usd`, which counted only the USDC part of exits (legs paid in kind",
-              "have no price on the exit path), so it said little about what left the Pot. Kept as 8 bytes",
-              "of padding so existing Pot accounts keep their layout; Pots created from now on hold 0."
-            ],
-            "type": "u64"
-          },
-          {
             "name": "created_at",
             "type": "i64"
           },

@@ -322,156 +322,58 @@ export function usePotIndexActions() {
     [program, pubkey, sendLegacy],
   )
 
-  const deposit = useCallback(
-    async (pot: PotView, amountUsdc: number, referrer: PublicKey | null, minSharesOut = 0, opts: { allocate?: boolean } = {}) => {
-      if (!program || !wallet || !pubkey) throw new Error('Connect a wallet first')
-      const feeds = pot.legs.map((l) => l.feedId)
-      // The operator posts the Pyth prices (and reclaims their rent afterwards), so the holder signs
-      // one deposit transaction plus, with deposit-and-allocate, one small transaction per leg. The
-      // wallet simulates all of them cleanly because the price accounts already exist.
-      const builtAt = Date.now()
-      const pr = await withStage('deposit:prices', fetch('/api/pot-index/prices', {
+  /**
+   * One signature per action. The server builds the transaction on a durable nonce (it does not
+   * expire while the wallet prompt is open), the holder signs it, the server refreshes the Pyth
+   * prices, co-signs and submits. See operator.server.ts.
+   */
+  const viaOperator = useCallback(
+    async (kind: 'deposit' | 'exit' | 'exit-usdc', body: Record<string, unknown>) => {
+      if (!wallet || !pubkey) throw new Error('Connect a wallet first')
+      const br = await withStage(`${kind}:build`, fetch('/api/pot-index/tx/build', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ feedIds: feeds }),
+        body: JSON.stringify({ kind, wallet: pubkey.toBase58(), ...body }),
       }))
-      const prices = (await pr.json()) as { ok?: boolean; feedIds?: string[]; priceUpdates?: string[]; cleanup?: string[]; error?: string }
-      if (!pr.ok || !prices.priceUpdates) throw new Error(prices.error ?? 'prices unavailable')
-      // The route returns feeds de-duplicated and lower-cased, in its own order: map back to the legs.
-      const byFeed = new Map((prices.feedIds ?? []).map((f, i) => [f, new PublicKey(prices.priceUpdates![i])]))
-      const priceUpdates = feeds.map((f) => {
-        const k = byFeed.get(f.toLowerCase())
-        if (!k) throw new Error('price missing for a leg')
-        return k
-      })
-      const cleanup = prices.cleanup ?? []
-      try {
-        const ixs = await buildDeposit(program, {
-          pot,
-          user: pubkey,
-          usdcMint: new PublicKey(POT_INDEX_SETTINGS.usdcMint),
-          treasury: new PublicKey(POT_INDEX_SETTINGS.treasury),
-          amountUsdc,
-          minSharesOut,
-          referrer,
-          priceUpdates,
-        })
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
-        const depositTx = new VersionedTransaction(new TransactionMessage({ payerKey: pubkey, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
-
-        // Deposit and allocate: buy the basket right after the deposit, in the same prompt. Best effort:
-        // if the planner is unavailable (stale prices, market closed) the deposit still goes through
-        // and keepers allocate later.
-        let allocTxs: VersionedTransaction[] = []
-        let allocated = 0
-        if (opts.allocate !== false) {
-          try {
-            const res = await fetch('/api/pot-index/allocate', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                wallet: pubkey.toBase58(),
-                mint: pot.indexMint.toBase58(),
-                depositNetUsdc: Math.floor(amountUsdc * 1e6 * (1 - ENTRY_FEE_BPS / 10_000)),
-                blockhash,
-                priceUpdates: priceUpdates.map((k) => k.toBase58()),
-              }),
-            })
-            const data = (await res.json()) as { txs?: string[]; plan?: unknown[] }
-            if (res.ok && data.txs?.length) {
-              allocTxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-              allocated = data.plan?.length ?? 0
-            }
-          } catch {
-            /* deposit only */
-          }
-        }
-
-        const all = [depositTx, ...allocTxs]
-        const signed = await withStage(`deposit:sign(${all.length} txs)`, wallet.signAllTransactions
-          ? (wallet.signAllTransactions(all) as Promise<VersionedTransaction[]>)
-          : Promise.all(all.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction)))
-        if (!(await bundleStillFresh(connection, signed[0], builtAt))) throw new Error(TOOK_TOO_LONG)
-        const sigs: string[] = []
-        for (let i = 0; i < signed.length; i++) {
-          const v = signed[i]
-          const sig = await withStage(`deposit:send ${i + 1}/${signed.length}`, connection.sendRawTransaction(v.serialize(), { maxRetries: 5 }))
-          await withStage(`deposit:confirm ${i + 1}/${signed.length} ${sig}`, connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed'))
-          sigs.push(sig)
-        }
-        await invalidate()
-        return Object.assign(sigs, { allocated })
-      } finally {
-        releasePrices(cleanup)
-      }
+      const built = (await br.json()) as { ok?: boolean; tx?: string; token?: string; error?: string; payUsdc?: string }
+      if (!br.ok || !built.tx || !built.token) throw new Error(built.error ?? 'could not build the transaction')
+      const tx = VersionedTransaction.deserialize(Buffer.from(built.tx, 'base64'))
+      const signed = (await withStage(`${kind}:sign`, wallet.signTransaction(tx))) as VersionedTransaction
+      const sr = await withStage(`${kind}:submit`, fetch('/api/pot-index/tx/submit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tx: Buffer.from(signed.serialize()).toString('base64'), token: built.token }),
+      }))
+      const res = (await sr.json()) as { ok?: boolean; sig?: string; allocated?: string[]; error?: string }
+      if (!sr.ok || !res.sig) throw new Error(res.error ?? 'the transaction was not accepted')
+      await invalidate()
+      return res
     },
-    [program, wallet, pubkey, connection],
+    [wallet, pubkey],
+  )
+
+  const deposit = useCallback(
+    async (pot: PotView, amountUsdc: number, referrer: PublicKey | null, _minSharesOut = 0, _opts: { allocate?: boolean } = {}) => {
+      const res = await viaOperator('deposit', { mint: pot.indexMint.toBase58(), amountUsdc, referrer: referrer?.toBase58() ?? null })
+      return Object.assign([res.sig!, ...(res.allocated ?? [])], { allocated: res.allocated?.length ?? 0 })
+    },
+    [viaOperator],
   )
 
   const exit = useCallback(
     async (pot: PotView, shares: number) => {
-      if (!program || !pubkey) throw new Error('Connect a wallet first')
-      const ixs = await buildExit(program, { pot, user: pubkey, usdcMint: new PublicKey(POT_INDEX_SETTINGS.usdcMint), shares })
-      const sig = await sendLegacy(ixs)
-      await invalidate()
-      return sig
+      const res = await viaOperator('exit', { mint: pot.indexMint.toBase58(), shares })
+      return res.sig!
     },
-    [program, pubkey, sendLegacy],
+    [viaOperator],
   )
 
-  /** Exit straight to USDC. Devnet: the server builds the bundle with the market maker's fill
-   *  (program enforces the minimum on-chain); the holder signs everything in one prompt. */
   const exitUsdc = useCallback(
     async (pot: PotView, shares: number) => {
-      if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      const sigs: string[] = []
-      // Two attempts: rebuild with fresh prices and a fresh blockhash if the wallet prompt took too
-      // long or the sending RPC does not know the bundle's blockhash.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const last = attempt === 1
-        const builtAt = Date.now()
-        // The blockhash comes from the browser's own RPC: that is the node that will send the bundle.
-        const { blockhash, lastValidBlockHeight } = await withStage('exit-usdc:blockhash', connection.getLatestBlockhash('finalized'))
-        const res = await withStage('exit-usdc:build', fetch('/api/pot-index/exit-usdc', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares), blockhash }),
-        }))
-        const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string; cleanup?: string[] }
-        if (!res.ok || !data.txs) throw new Error(data.error ?? 'market maker unavailable')
-        const vtxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-        const cleanup = data.cleanup ?? []
-        const signed = await withStage(`exit-usdc:sign(${vtxs.length} txs, attempt ${attempt + 1})`, wallet.signAllTransactions
-          ? (wallet.signAllTransactions(vtxs) as Promise<VersionedTransaction[]>)
-          : Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction)))
-        if (!(await bundleStillFresh(connection, signed[0], builtAt))) {
-          releasePrices(cleanup)
-          if (last) throw new Error(TOOK_TOO_LONG)
-          continue
-        }
-        let i = 0
-        try {
-          for (; i < signed.length; i++) {
-            const v = signed[i]
-            const sig = await withStage(`exit-usdc:send ${i + 1}/${signed.length}`, connection.sendRawTransaction(v.serialize(), { maxRetries: 5 }))
-            await withStage(`exit-usdc:confirm ${i + 1}/${signed.length} ${sig}`, connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed'))
-            sigs.push(sig)
-          }
-        } catch (e) {
-          // Nothing landed yet and the node rejected the blockhash: rebuild once. The exit itself
-          // is one atomic transaction, so the Pot's state is consistent either way.
-          releasePrices(cleanup)
-          const m = e instanceof Error ? e.message.toLowerCase() : ''
-          if (i === 0 && !last && m.includes('blockhash not found')) continue
-          throw e
-        }
-        releasePrices(cleanup)
-        break
-      }
-      await invalidate()
-      return sigs
+      const res = await viaOperator('exit-usdc', { mint: pot.indexMint.toBase58(), shares: String(shares) })
+      return [res.sig!]
     },
-    [wallet, pubkey, connection],
+    [viaOperator],
   )
 
   return { createPot, deposit, exit, exitUsdc, connected: !!pubkey, pubkey }

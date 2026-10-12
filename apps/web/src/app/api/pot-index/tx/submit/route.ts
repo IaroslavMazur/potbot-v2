@@ -21,6 +21,8 @@ export async function POST(req: Request) {
     if (b.timing) console.log('[potfolio submit] timing', JSON.stringify(b.timing))
     const tx = VersionedTransaction.deserialize(Buffer.from(b.tx ?? '', 'base64'))
     const t = verifyToken(op, tx, b.token ?? '')
+    const keysDbg = tx.message.staticAccountKeys.map((k) => k.toBase58().slice(0, 6))
+    console.log('[potfolio submit] tx', JSON.stringify({ kind: t.kind, sameBlockhash: tx.message.recentBlockhash === t.blockhash, nIx: tx.message.compiledInstructions.length, programs: tx.message.compiledInstructions.map((ci) => tx.message.staticAccountKeys[ci.programIdIndex].toBase58().slice(0, 8)), sigs: tx.signatures.length, keys: keysDbg.length, alt: tx.message.addressTableLookups.length }))
     const keys = tx.message.staticAccountKeys
     const holder = new PublicKey(t.wallet)
     const hi = keys.findIndex((k) => k.equals(holder))
@@ -42,6 +44,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, sig, allocated })
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e)
+    console.error('[potfolio submit] failed', m.slice(0, 600))
     const low = m.toLowerCase()
     if (low.includes('blockhash not found') || low.includes('block height exceeded') || low.includes('expired'))
       return NextResponse.json({ error: 'That signature took longer than the network allows (about a minute). Nothing changed. Confirm again.', expired: true }, { status: 409 })

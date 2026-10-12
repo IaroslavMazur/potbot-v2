@@ -239,8 +239,9 @@ function canonical(ixs: { programId: PublicKey; keys: { pubkey: PublicKey; isSig
   return h.digest()
 }
 
-export function instructionsHash(ixs: TransactionInstruction[]): string {
-  return canonical(ixs).toString('base64url')
+/** Hash of the transaction's own instructions as compiled (message-level signer/writable flags). */
+export function instructionsHash(tx: VersionedTransaction): string {
+  return canonical(holderInstructions(tx)).toString('base64url')
 }
 
 /** The transaction's instructions minus wallet extras, decompiled (v0, no lookup tables). */
@@ -275,8 +276,8 @@ export function verifyToken(op: Keypair, tx: VersionedTransaction, token: string
   return t
 }
 
-export function newTicket(kind: string, wallet: PublicKey, mint: PublicKey, feedIds: string[], ixs: TransactionInstruction[], bh: { blockhash: string; lastValidBlockHeight: number }): TxTicket {
-  return { kind, wallet: wallet.toBase58(), mint: mint.toBase58(), feedIds, ix: instructionsHash(ixs), blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight, exp: Date.now() + TOKEN_TTL_MS }
+export function newTicket(kind: string, wallet: PublicKey, mint: PublicKey, feedIds: string[], tx: VersionedTransaction, bh: { blockhash: string; lastValidBlockHeight: number }): TxTicket {
+  return { kind, wallet: wallet.toBase58(), mint: mint.toBase58(), feedIds, ix: instructionsHash(tx), blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight, exp: Date.now() + TOKEN_TTL_MS }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -29,7 +29,7 @@ export default async function NamePage({ searchParams }: { searchParams?: Promis
       <div style={{ maxWidth: 560, margin: '40px auto 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
         <Feature title="One identity" body="Send & receive with a name, not a 44-char address." />
         <Feature title="You own it" body="Minted to your wallet on-chain. Non-custodial." />
-        <Feature title="Ecosystem-wide" body="Works across PotBot, Y-DAO & SOLO." />
+        <Feature title="Ecosystem-wide" body="Works across PotBot and Y-DAO on Solana." />
       </div>
       <PricingTable />
       <Faq />

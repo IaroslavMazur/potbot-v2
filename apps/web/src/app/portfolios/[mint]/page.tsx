@@ -184,7 +184,7 @@ export default function PotPage() {
                   <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-pot-border">
                     <div className="h-full rounded-full bg-gradient-to-r from-pot-green/60 to-pot-green" style={{ width: `${Math.max(3, pct)}%` }} />
                   </div>
-                  <div className="mt-1 text-[11px] text-white/50">The plant grows with the money inside. Level is read from the chain and cannot be faked.</div>
+                  <div className="mt-1 text-xs text-white/70">{next ? <>Next unlock at {next.name}: {next.unlocks.toLowerCase()}.</> : <>Unlocked: {cur.unlocks.toLowerCase()}.</>} Level is read from the chain.</div>
                 </div>
               )
             })()}

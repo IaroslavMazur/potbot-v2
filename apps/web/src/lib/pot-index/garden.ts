@@ -8,13 +8,14 @@ import type { PotView } from './client'
 export type PlantSeries = 'pink' | 'purple' | 'blue' | 'coral'
 export type PlantStage = 1 | 2 | 3 | 4 | 5 | 6
 
-export const STAGES: { level: PlantStage; name: string; minUsd: number; label: string }[] = [
-  { level: 1, name: 'Seedling', minUsd: 0, label: '$0' },
-  { level: 2, name: 'Sprout', minUsd: 1_000, label: '$1k' },
-  { level: 3, name: 'Bud', minUsd: 10_000, label: '$10k' },
-  { level: 4, name: 'Bloom', minUsd: 50_000, label: '$50k' },
-  { level: 5, name: 'Full Bloom', minUsd: 250_000, label: '$250k' },
-  { level: 6, name: 'Mature Tree', minUsd: 1_000_000, label: '$1M' },
+/** `unlocks`: what reaching the level gives the POTFolio. Rolling out after the Fair (off-chain first, fee tier in program v2). */
+export const STAGES: { level: PlantStage; name: string; minUsd: number; label: string; unlocks: string }[] = [
+  { level: 1, name: 'Seedling', minUsd: 0, label: '$0', unlocks: 'Shareable by link' },
+  { level: 2, name: 'Sprout', minUsd: 1_000, label: '$1k', unlocks: 'Public catalog and leaderboard' },
+  { level: 3, name: 'Bud', minUsd: 10_000, label: '$10k', unlocks: 'Verified badge, share card' },
+  { level: 4, name: 'Bloom', minUsd: 50_000, label: '$50k', unlocks: 'Featured, DEX pool seeded' },
+  { level: 5, name: 'Full Bloom', minUsd: 250_000, label: '$250k', unlocks: 'Managed mode for the creator' },
+  { level: 6, name: 'Mature Tree', minUsd: 1_000_000, label: '$1M', unlocks: 'Community mode, lower protocol fee' },
 ]
 
 export function stageForUsd(navUsd: number): PlantStage {

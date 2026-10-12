@@ -9,7 +9,7 @@ const PATH: Record<Audience, { title: string; steps: { title: string; body: stri
   holders: {
     title: 'You hold the token',
     steps: [
-      { title: 'Pick a POTfolio', body: 'A basket someone put together: tokens, stocks, RWA, memes.' },
+      { title: 'Pick a POTFolio', body: 'A basket someone put together: tokens, stocks, RWA, memes.' },
       { title: 'Deposit USDC, get the token', body: 'You invest in the portfolio and receive a token that mirrors everything inside it.' },
       { title: 'Hold it, stay liquid', body: 'It is never locked. Keep it in your wallet, send it, use it anywhere a token works. The value follows the basket.' },
       { title: 'Leave any time', body: 'Redeem the token and choose: every asset of the basket, or plain USDC.' },
@@ -20,12 +20,12 @@ const PATH: Record<Audience, { title: string; steps: { title: string; body: stri
     ],
   },
   creators: {
-    title: 'You create the POTfolio',
+    title: 'You create the POTFolio',
     steps: [
       { title: 'Build the basket', body: 'Pick up to 5 assets and their weights. Name it, give it a ticker.' },
       { title: 'Publish it', body: 'Your portfolio becomes a token.' },
       { title: 'Share your idea', body: 'People see what you believe in and back it by holding your token.' },
-      { title: 'Earn every time', body: 'Every deposit into your POTfolio pays you, instantly and on-chain. Those who bring new holders earn too.' },
+      { title: 'Earn every time', body: 'Every deposit into your POTFolio pays you, instantly and on-chain. Those who bring new holders earn too.' },
     ],
     benefits: [
       'Your track record is public and on-chain.',
@@ -82,7 +82,7 @@ export function HowAPotWorks({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link href={who === 'holders' ? '/portfolios' : '/portfolios/new'} className="btn-primary">
-            {who === 'holders' ? 'See live POTfolios' : 'Create a POTfolio'}
+            {who === 'holders' ? 'See live POTFolios' : 'Create a POTFolio'}
           </Link>
           <Link href="/learn" className="btn-secondary">Learn more</Link>
         </div>

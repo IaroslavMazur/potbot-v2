@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { usePots, useAssetPrices, useAllPotStats } from '@/hooks/usePotIndex'
 import { PotCard } from '@/components/pot-index/PotCard'
 import { ProtocolStats } from '@/components/pot-index/ProtocolStats'
+import { MyPositions } from '@/components/pot-index/MyPositions'
 import { POT_INDEX_SETTINGS } from '@/lib/pot-index/registry'
 import { potCategory } from '@/lib/pot-index/garden'
 import type { PotView } from '@/lib/pot-index/client'
@@ -37,18 +38,18 @@ export default function PortfoliosPage() {
   }, [pots.data, cat, sort, stats.data])
 
   useEffect(() => {
-    document.title = 'POTfolios · PotBot'
+    document.title = 'POTFolios · PotBot'
   }, [])
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <PageHeader
         eyebrow="Live on devnet"
-        title="POTfolios"
+        title="POTFolios"
         lede="One token, a whole basket inside. Deposit USDC to get it, redeem it any time for the assets or USDC."
         action={
         <Link href="/portfolios/new" className="btn-primary whitespace-nowrap">
-          + Create a POTfolio
+          + Create a POTFolio
         </Link>
         }
       />
@@ -62,6 +63,7 @@ export default function PortfoliosPage() {
         </div>
       )}
 
+      {pots.data && pots.data.length > 0 && <MyPositions pots={pots.data} stats={stats.data} />}
       {pots.data && pots.data.length > 0 && <ProtocolStats pots={pots.data} />}
       {pots.data && pots.data.length > 0 && (
         <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -82,7 +84,7 @@ export default function PortfoliosPage() {
               <option value="newest">Newest</option>
             </select>
           </label>
-          <span className="ml-auto text-sm text-white/70">{shown.length} POTfolio{shown.length === 1 ? '' : 's'}</span>
+          <span className="ml-auto text-sm text-white/70">{shown.length} POTFolio{shown.length === 1 ? '' : 's'}</span>
         </div>
       )}
       {pots.isLoading && <p className="text-white/70">Loading Pots from chain…</p>}

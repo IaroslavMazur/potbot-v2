@@ -1,5 +1,5 @@
 /**
- * Server-side operator for the POTfolio flows (devnet: the market maker key).
+ * Server-side operator for the POTFolio flows (devnet: the market maker key).
  *
  * Why this exists: a browser wallet can take a minute or more to sign (its own simulation, the
  * person reading the prompt). A Solana transaction built on a recent blockhash lives ~60-90 s and

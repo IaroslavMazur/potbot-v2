@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-/** Browser-side failures of the POTfolio flows, so they show up in server logs next to the route
+/** Browser-side failures of the POTFolio flows, so they show up in server logs next to the route
  *  calls. No secrets: wallet pubkey, stage, raw error text, user agent. Fire and forget. */
 export const runtime = 'nodejs'
 

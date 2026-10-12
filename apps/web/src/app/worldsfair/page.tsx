@@ -6,9 +6,9 @@ import { LivePots } from '@/components/pot-index/LivePots'
 import { PageHeader } from '@/components/PageHeader'
 
 export const metadata: Metadata = {
-  title: 'PotBot POTfolio × Crypto World\'s Fair',
+  title: 'PotBot POTFolio × Crypto World\'s Fair',
   description:
-    'PotBot POTfolio: a basket of Solana assets (crypto, Solana natives, tokenized stocks, memes) as one liquid index token. Built for Colosseum Crypto World\'s Fair, Sept 14 – Oct 12, 2026.',
+    'PotBot POTFolio: a basket of Solana assets (crypto, Solana natives, tokenized stocks, memes) as one liquid index token. Built for Colosseum Crypto World\'s Fair, Sept 14 – Oct 12, 2026.',
 }
 
 const PROGRAM = POT_INDEX_SETTINGS.programId
@@ -19,7 +19,7 @@ export default function WorldsFairPage() {
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <PageHeader
         eyebrow="Colosseum · Crypto World's Fair · Solana"
-        title={<>PotBot <span className="text-pot-green">POTfolio</span></>}
+        title={<>PotBot <span className="text-pot-green">POTFolio</span></>}
         lede="Any basket of Solana assets as one liquid token. Create a portfolio, hold the token."
         className="mb-6"
       />
@@ -35,9 +35,9 @@ export default function WorldsFairPage() {
           <dt className="font-semibold text-white">Why trust it</dt>
           <dd className="text-pot-muted">Assets sit in program-owned accounts with no withdraw instruction. Exit in kind needs no oracle and cannot be paused. Keepers are bounded by code. Three security reviews, every finding published.</dd>
           <dt className="font-semibold text-white">Why now</dt>
-          <dd className="text-pot-muted">Crypto Twitter asked for Creator ETFs in December 2025; Ondo and BlackRock shipped a closed version in September 2026; USDC lands in 82M Samsung wallets this month. POTfolio is the open one.</dd>
+          <dd className="text-pot-muted">Crypto Twitter asked for Creator ETFs in December 2025; Ondo and BlackRock shipped a closed version in September 2026; USDC lands in 82M Samsung wallets this month. POTFolio is the open one.</dd>
           <dt className="font-semibold text-white">Live today</dt>
-          <dd className="text-pot-muted">Program on Solana devnet since Oct 8, five POTfolios, deposit buys the basket in one wallet prompt, exit to assets or USDC, price history and P&amp;L per wallet. Third PotBot hackathon: Telegram group trading, then governed vaults, now the token.</dd>
+          <dd className="text-pot-muted">Program on Solana devnet since Oct 8, five POTFolios, deposit buys the basket in one wallet prompt, exit to assets or USDC, price history and P&amp;L per wallet. Third PotBot hackathon: Telegram group trading, then governed vaults, now the token.</dd>
         </dl>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <Link href="/portfolios/PotSvA4ynuxbMFUA8SJSbULHhuTY1JcL5RaxnQz5FmM" className="btn-primary text-center">Try it (2 minutes)</Link>
@@ -67,12 +67,12 @@ export default function WorldsFairPage() {
           <li>Click <b className="text-white">Get test USDC</b>: 1,000 test USDC and a little SOL for fees land in the wallet.</li>
           <li><b className="text-white">Deposit 100</b>. One wallet prompt: Pyth prices are posted, your tokens are minted at NAV, and the basket is bought leg by leg. The activity feed shows every transaction.</li>
           <li><b className="text-white">Redeem</b>: move the slider, choose <i>Get the assets</i> (every asset in kind) or <i>Get USDC</i> (sold in the same transaction with an on-chain minimum). Your position card shows cost basis and P&amp;L.</li>
-          <li>Optional: <Link href="/portfolios/new" className="text-pot-green underline">create your own POTfolio</Link> in one transaction and open it through your referral link from a second wallet.</li>
+          <li>Optional: <Link href="/portfolios/new" className="text-pot-green underline">create your own POTFolio</Link> in one transaction and open it through your referral link from a second wallet.</li>
         </ol>
         <p className="text-xs">Everything above is a real devnet transaction on program <code className="break-all">{PROGRAM}</code>. Test tokens, live Pyth prices.</p>
       </Section>
 
-      <Section title="Creator ETFs, as crypto Twitter asked for" summary="mert and Akshay BD, Dec 20 2025, and what POTfolio changes: the creator cannot touch the money.">
+      <Section title="Creator ETFs, as crypto Twitter asked for" summary="mert and Akshay BD, Dec 20 2025, and what POTFolio changes: the creator cannot touch the money.">
         <p>
           On Dec 20, 2025 mert (Helius) wrote: <i>&ldquo;your fav CT person creates index fund of tokens, mints ETF shares, you buy if you
           think they&apos;re a good decision maker, finally know if a person is a sound investor or a LARP.&rdquo;</i> The same day Akshay BD
@@ -81,7 +81,7 @@ export default function WorldsFairPage() {
           thread. mert asked whether anyone had traction.
         </p>
         <p>
-          POTfolio is that product, with one change that answers the objections in those threads: the creator publishes the basket and
+          POTFolio is that product, with one change that answers the objections in those threads: the creator publishes the basket and
           earns on every deposit, but cannot touch the money. No custody, no discretion, no manager liability. Five baskets live on
           devnet, every deposit and exit on Explorer: that is the traction.
         </p>
@@ -103,14 +103,14 @@ export default function WorldsFairPage() {
             vault with strategies, where capital sits in program-owned accounts and the group governs it.
           </li>
           <li>
-            <b className="text-white">Hackathon 3: the token.</b> This time we wrapped the vault into a single liquid token. A POTfolio
+            <b className="text-white">Hackathon 3: the token.</b> This time we wrapped the vault into a single liquid token. A POTFolio
             is a basket you can hold in your wallet, send to a friend, sell on a DEX or post as collateral, and redeem any time for
             every asset inside or for USDC. That makes PotBot a launchpad for portfolios, and it is what we keep building after the Fair.
           </li>
         </ol>
       </Section>
 
-      <Section title="What a POTfolio is, in plain words" summary="One token, a slice of the basket. No exit liquidity games. Nobody can withdraw. Creators earn.">
+      <Section title="What a POTFolio is, in plain words" summary="One token, a slice of the basket. No exit liquidity games. Nobody can withdraw. Creators earn.">
         <ul className="list-disc space-y-2 pl-5">
           <li>
             <b>One token = a slice of the whole basket.</b> Deposit USDC, the Pot mints tokens at the current value of the basket
@@ -137,10 +137,10 @@ export default function WorldsFairPage() {
         </ul>
       </Section>
 
-      <Section title="Live on devnet now" summary="Five POTfolios with live Pyth prices and test tokens.">
+      <Section title="Live on devnet now" summary="Five POTFolios with live Pyth prices and test tokens.">
         <LivePots />
         <p className="mt-4 text-xs">
-          Test tokens, real prices. Stock POTfolios mint only while US markets are open: the program refuses stale prices, exits work
+          Test tokens, real prices. Stock POTFolios mint only while US markets are open: the program refuses stale prices, exits work
           always. Free Pyth tier limits devnet assets to majors; the paid tier adds the long tail (JUP, BONK, NVDA…) by config.
         </p>
       </Section>
@@ -149,7 +149,7 @@ export default function WorldsFairPage() {
         <HowAPotWorks compact />
       </Section>
 
-      <Section title="Where it sits" summary="Symmetry, Cesto, DiversiFi, GLAM, Ondo: what each does and what POTfolio adds.">
+      <Section title="Where it sits" summary="Symmetry, Cesto, DiversiFi, GLAM, Ondo: what each does and what POTFolio adds.">
         <p>
           Baskets on Solana are not new. What is new is a basket that is a token anyone can hold, with an exit nobody can pause and
           keepers bounded by code instead of trust.
@@ -197,7 +197,7 @@ export default function WorldsFairPage() {
             inside the same wallet approval. Cash deployments have no cooldown and are priced at mid.
           </li>
           <li>
-            <b>Five live POTfolios</b> across crypto majors, Solana natives, tokenized stocks and memes; keeper running; faucet with
+            <b>Five live POTFolios</b> across crypto majors, Solana natives, tokenized stocks and memes; keeper running; faucet with
             test USDC and SOL; index price history, cost basis and P&amp;L per wallet; Garden mode (every Pot grows a plant with its NAV).
           </li>
           <li>
@@ -217,7 +217,7 @@ export default function WorldsFairPage() {
         <ul className="list-disc space-y-2 pl-5">
           <li>Up to 5 assets per Pot today, 10 next (deposit transactions split across price updates).</li>
           <li>Devnet sells and buys go through a test market maker; on mainnet the same two instructions wrap Jupiter swaps signed by the holder alone.</li>
-          <li>Fixed weights now. Next: Managed POTfolios (creator adjusts within a public mandate and a timelock) and Community POTfolios (holders vote with the token).</li>
+          <li>Fixed weights now. Next: Managed POTFolios (creator adjusts within a public mandate and a timelock) and Community POTFolios (holders vote with the token).</li>
           <li>Keeper economics, program v2: cash deploy in the same transaction as the deposit (v1 transactions), asset rotations as a Dutch auction so keepers compete the slippage band down, per-Pot deadband. The current band is a floor a third-party keeper can take in full; we say so in the docs instead of pretending otherwise.</li>
           <li>Secondary market: a $POT/USDC pool on Meteora so tokens trade on Jupiter, Photon and in wallets; minting and burning at NAV keep the pool honest.</li>
           <li>Long-tail assets via paid Pyth or Switchboard; permissioned stocks via MPL-3643; &ldquo;Launch with a floor&rdquo;, bonding-curve launches backed by a Pot.</li>
@@ -244,7 +244,7 @@ export default function WorldsFairPage() {
 
 const ROWS: { name: string; what: string; token: string; exit: string; keepers: string; create: string; earn: string }[] = [
   {
-    name: 'PotBot POTfolio',
+    name: 'PotBot POTFolio',
     what: 'Basket as one SPL token, fixed weights, up to 5 assets',
     token: 'Yes, any wallet',
     exit: 'In kind or USDC, never pausable, on-chain minimum',

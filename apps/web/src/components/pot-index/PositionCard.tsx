@@ -11,7 +11,7 @@ function usd(v: number, digits = 2) {
  * The connected wallet's P&L in this Pot. Value = tokens held × index price (live). Cost basis comes
  * from the wallet's own deposits and exits on-chain (average cost, entry fees included).
  */
-export function PositionCard({ pot, sharesBase, indexPrice, connected }: { pot: PotView; sharesBase: number | undefined; indexPrice: number | undefined; connected: boolean }) {
+export function PositionCard({ pot, sharesBase, indexPrice, connected, change7d }: { pot: PotView; sharesBase: number | undefined; indexPrice: number | undefined; connected: boolean; change7d?: number | null }) {
   const q = useWalletPosition(pot)
   const shares = (sharesBase ?? 0) / 1e6
   if (!connected || (!sharesBase && !(q.data && q.data.events > 0))) {
@@ -61,6 +61,24 @@ export function PositionCard({ pot, sharesBase, indexPrice, connected }: { pot: 
           <span className={tone(pos.realizedUsd)}>{sign(pos.realizedUsd)}{usd(Math.abs(pos.realizedUsd))}</span>
         </p>
       )}
+      {(() => {
+        const avgEntry = pos && shares > 0 && pos.costUsd > 0 ? pos.costUsd / shares : null
+        if (avgEntry == null || indexPrice == null) return null
+        const vsEntry = ((indexPrice - avgEntry) / avgEntry) * 100
+        return (
+          <details className="mt-3 text-xs">
+            <summary className="cursor-pointer select-none text-white/70">Entry vs now vs market</summary>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-pot-dark p-2"><div className="text-white/50">Your entry</div><div className="font-semibold text-white">{usd(avgEntry, 4)}</div></div>
+              <div className="rounded-lg bg-pot-dark p-2"><div className="text-white/50">Now</div><div className="font-semibold text-white">{usd(indexPrice, 4)}</div></div>
+              <div className="rounded-lg bg-pot-dark p-2"><div className="text-white/50">You vs entry</div><div className={`font-semibold ${tone(vsEntry)}`}>{sign(vsEntry)}{Math.abs(vsEntry).toFixed(2)}%</div></div>
+            </div>
+            {change7d != null && (
+              <p className="mt-2 text-white/60">The index moved <span className={tone(change7d)}>{sign(change7d)}{Math.abs(change7d).toFixed(2)}%</span> over the last 7 days for everyone; your line above depends on when you entered. Your average entry is the dashed line on the chart.</p>
+            )}
+          </details>
+        )
+      })()}
       <p className="mt-2 text-[11px] text-white/50">Cost basis is computed from this wallet&apos;s own deposits and redemptions on-chain, entry fees included. Redemptions to assets reduce cost at average price.</p>
     </div>
   )

@@ -1,6 +1,6 @@
 # Garden mode
 
-Every POTfolio is a plant. Its level is a function of the USD value held in the Pot (supply x NAV per token), read from chain, so it cannot be faked. Deposits water it, exits dry it out.
+Every POTFolio is a plant. Its level is a function of the USD value held in the Pot (supply x NAV per token), read from chain, so it cannot be faked. Deposits water it, exits dry it out.
 
 | Level | Name | From |
 |---|---|---|
@@ -13,4 +13,4 @@ Every POTfolio is a plant. Its level is a function of the USD value held in the 
 
 Thresholds and stage names: `apps/web/src/lib/pot-index/garden.ts` (`STAGES`, `stageForUsd`). Plant variety follows the Pot's dominant category: crypto majors pink, Solana natives purple, stocks/RWA blue, memes coral (`potSeries`). Sprites: `apps/web/public/garden/<series>-<level>.png`.
 
-Where it shows: the landing section (demo loop), the plant badge on every POTfolio card and page (real level), the level line on the POTfolio page ("next level at $10k").
+Where it shows: the landing section (demo loop), the plant badge on every POTFolio card and page (real level), the level line on the POTFolio page ("next level at $10k").

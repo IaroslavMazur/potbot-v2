@@ -7,12 +7,12 @@ import { OnboardingTutorial } from '@/components/OnboardingTutorial'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: { default: 'PotBot POTfolio: any basket of Solana assets as one liquid token', template: '%s · PotBot' },
+  title: { default: 'PotBot POTFolio: any basket of Solana assets as one liquid token', template: '%s · PotBot' },
   description: 'Create a portfolio, hold the token. Deposit USDC, get one token that mirrors the whole basket, redeem any time for the assets or USDC. Nobody can withdraw the assets.',
   metadataBase: new URL('https://potbot.fun'),
   alternates: { canonical: '/' },
   openGraph: {
-    title: 'PotBot POTfolio: any basket of Solana assets as one liquid token',
+    title: 'PotBot POTFolio: any basket of Solana assets as one liquid token',
     description: 'Create a portfolio, hold the token. Exit any time, in assets or USDC. Live on Solana devnet.',
     url: 'https://potbot.fun',
     siteName: 'PotBot',
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     site: '@PotBot_sol',
     creator: '@CryptoYDao',
-    title: 'PotBot POTfolio: any basket of Solana assets as one liquid token',
+    title: 'PotBot POTFolio: any basket of Solana assets as one liquid token',
     description: 'Create a portfolio, hold the token. Exit any time, in assets or USDC. Live on Solana devnet.',
   },
   manifest: '/manifest.json',
@@ -66,8 +66,8 @@ const FOOTER_COLUMNS: { title: string; links: { label: string; href: string; ext
   {
     title: 'Product',
     links: [
-      { label: 'POTfolios', href: '/portfolios' },
-      { label: 'Create a POTfolio', href: '/portfolios/new' },
+      { label: 'POTFolios', href: '/portfolios' },
+      { label: 'Create a POTFolio', href: '/portfolios/new' },
       { label: 'How it works', href: '/learn' },
       { label: 'FAQ', href: '/faq' },
     ],

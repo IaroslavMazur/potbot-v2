@@ -1,18 +1,18 @@
 # FAQ
 
-**Is a POTfolio a fund?** No. Nobody manages your money. The basket is fixed at creation and enforced by the program.
+**Is a POTFolio a fund?** No. Nobody manages your money. The basket is fixed at creation and enforced by the program.
 
 **Who holds the assets?** Program-owned accounts with no private key. There is no withdraw instruction.
 
 **What do I get when I leave?** Your choice: every asset of the basket in kind, or USDC in one transaction (the legs are sold in the same transaction, the program enforces a minimum from Pyth and takes 0.10% on the sold part). Either way 0.50% stays in the Pot.
 
-**Can the creator change the basket?** No. The creator can only pause deposits or cap the size. Managed and Community POTfolios come after the Fair.
+**Can the creator change the basket?** No. The creator can only pause deposits or cap the size. Managed and Community POTFolios come after the Fair.
 
 **Why USDC in?** It keeps the price math simple: the Pot is valued in USD with Pyth and mints at that value. Right after a deposit the basket is bought in the same wallet prompt (holder acts as keeper inside the program's bounds). Deposits in other assets are in development.
 
 **Why a 1 USDC minimum?** Dust protection; a smaller deposit would cost more in rent and fees than it is worth.
 
-**Where do prices come from?** Pyth, posted in the same transaction, max 5 minutes old, priced conservatively. Stale prices are refused, so stock POTfolios only take deposits while US markets are open. Exits need no prices.
+**Where do prices come from?** Pyth, posted in the same transaction, max 5 minutes old, priced conservatively. Stale prices are refused, so stock POTFolios only take deposits while US markets are open. Exits need no prices.
 
 **What is a keeper?** A bot that buys the basket and keeps it balanced inside limits the program checks on every trade. Anyone can run one.
 
@@ -20,6 +20,6 @@
 
 **Can I paste any token address?** Any token with a Pyth (or, later, Switchboard) price feed. On devnet only our test tokens exist, so the list is short; on mainnet it is hundreds at launch.
 
-**What is a Vault?** PotBot v2: a group treasury with members, proposals and votes. POTfolios have holders and a token; Vaults have members and governance.
+**What is a Vault?** PotBot v2: a group treasury with members, proposals and votes. POTFolios have holders and a token; Vaults have members and governance.
 
 **What is the Bot?** The agent side: keeps baskets balanced, exposes every Pot to AI agents over MCP, and (in development) sends holders a digest of what grew, what fell and why.

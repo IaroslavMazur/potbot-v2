@@ -1,7 +1,7 @@
 # Overview
 
 ## One sentence
-A POTfolio is any basket of Solana assets, held as one token: deposit USDC to get it, hold it anywhere a token works, redeem it any time for your share of every asset inside.
+A POTFolio is any basket of Solana assets, held as one token: deposit USDC to get it, hold it anywhere a token works, redeem it any time for your share of every asset inside.
 
 ## Who it is for
 - **Holders**: communities, creators' audiences, degens who want exposure to a theme without managing five tokens.
@@ -15,7 +15,7 @@ A POTfolio is any basket of Solana assets, held as one token: deposit USDC to ge
 4. **Creators earn without custody.** Fees are split on-chain in the deposit transaction. Creators never hold anyone's money.
 
 ## What it is not
-- Not a managed fund. Weights are fixed at creation. Managed and Community POTfolios (creator adjusts inside a public mandate with a timelock; holders vote) are planned after the Fair.
+- Not a managed fund. Weights are fixed at creation. Managed and Community POTFolios (creator adjusts inside a public mandate with a timelock; holders vote) are planned after the Fair.
 - Not a DEX. The token is minted and burned at net asset value (NAV). A secondary pool is planned so it also trades.
 - Not audited yet. Tested (LiteSVM suite) and reviewed against the Solana Foundation checklist; third-party audit is on the mainnet path.
 
@@ -26,7 +26,7 @@ A POTfolio is any basket of Solana assets, held as one token: deposit USDC to ge
 4. Holder redeems: tokens burned, pro-rata share of USDC cash and every asset transferred in kind, or sold to USDC in the same transaction with an on-chain minimum. 0.50% stays in the Pot.
 
 ## Glossary
-- **Pot**: the on-chain basket (PDA + vaults + mint). "POTfolio" is the product name for a Pot and its token.
+- **Pot**: the on-chain basket (PDA + vaults + mint). "POTFolio" is the product name for a Pot and its token.
 - **NAV**: net asset value, USDC cash + sum of (vault balance x Pyth price).
 - **Leg**: one asset in the basket with its target weight.
 - **Keeper**: any bot that submits a bounded rebalance.

@@ -24,7 +24,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ mint: string }>
     {
       name: pot.name,
       symbol: pot.symbol,
-      description: `PotBot POTfolio index token: ${comp}. Mint at NAV, exit in kind.`,
+      description: `PotBot POTFolio index token: ${comp}. Mint at NAV, exit in kind.`,
       image: `${origin}/token-meta/potbot-512.png`,
       external_url: `${origin}/portfolios/${mint}`,
     },

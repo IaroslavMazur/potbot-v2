@@ -2,6 +2,7 @@
 
 import { assetByMint } from '@/lib/pot-index/registry'
 import type { PotView } from '@/lib/pot-index/client'
+import { TokenHover } from './TokenHover'
 
 const COLORS = ['#00ff88', '#8b5cf6', '#38bdf8', '#f59e0b', '#f472b6']
 
@@ -26,7 +27,7 @@ export function CompositionBar({ pot, actualUsd, cashUsd }: { pot: PotView; actu
           return (
             <li key={l.mint.toBase58()} className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: legColor(i) }} />
-              <span className="font-semibold text-white">{a?.symbol ?? l.mint.toBase58().slice(0, 4)}</span>
+              <TokenHover symbol={a?.symbol ?? ''}><span className="font-semibold text-white">{a?.symbol ?? l.mint.toBase58().slice(0, 4)}</span></TokenHover>
               <span className="text-pot-muted">
                 {l.weightBps / 100}%
                 {actualPct !== null && <span className="ml-1 text-xs">(now {actualPct.toFixed(1)}%)</span>}

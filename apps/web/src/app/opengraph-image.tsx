@@ -3,7 +3,7 @@ import path from 'node:path'
 import { ImageResponse } from 'next/og'
 
 export const runtime = 'nodejs'
-export const alt = 'PotBot POTfolio: any basket of Solana assets as one liquid token'
+export const alt = 'PotBot POTFolio: any basket of Solana assets as one liquid token'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -19,7 +19,7 @@ export default async function OgImage() {
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 0 0 80px', width: 720 }}>
           <div style={{ display: 'flex', fontSize: 30, fontWeight: 700, color: '#ffffff' }}>
             Pot<span style={{ color: '#14F195' }}>Bot</span>
-            <span style={{ marginLeft: 14, color: '#8B9BB4', fontWeight: 500 }}>POTfolio</span>
+            <span style={{ marginLeft: 14, color: '#8B9BB4', fontWeight: 500 }}>POTFolio</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', marginTop: 28, fontSize: 64, fontWeight: 900, lineHeight: 1.05, color: '#ffffff', letterSpacing: -1.5 }}>
             <span>Any basket of</span>

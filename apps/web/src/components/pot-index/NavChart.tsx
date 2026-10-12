@@ -12,7 +12,7 @@ function pct(v: number | null | undefined, digits = 2) {
 }
 
 /** Plain SVG line of index price over time. No library: the data is small and the shape is what matters. */
-export function Sparkline({ points, width = 600, height = 160, stroke, fill = true, className }: { points: NavPoint[]; width?: number; height?: number; stroke?: string; fill?: boolean; className?: string }) {
+export function Sparkline({ points, width = 600, height = 160, stroke, fill = true, className, entry }: { points: NavPoint[]; width?: number; height?: number; stroke?: string; fill?: boolean; className?: string; entry?: number | null }) {
   const d = useMemo(() => {
     if (points.length < 2) return null
     const xs = points.map((p) => p.t)
@@ -30,8 +30,9 @@ export function Sparkline({ points, width = 600, height = 160, stroke, fill = tr
     const sy = (y: number) => height - pad - ((y - y0) / (y1 - y0)) * (height - 2 * pad)
     const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.t).toFixed(1)} ${sy(p.price).toFixed(1)}`).join(' ')
     const area = `${line} L${sx(x1).toFixed(1)} ${height - pad} L${sx(x0).toFixed(1)} ${height - pad} Z`
-    return { line, area }
-  }, [points, width, height])
+    const entryY = entry != null && entry >= y0 && entry <= y1 ? sy(entry) : null
+    return { line, area, entryY }
+  }, [points, width, height, entry])
   if (!d) return null
   const up = points[points.length - 1].price >= points[0].price
   const color = stroke ?? (up ? 'var(--c-brand-green, #14F195)' : '#ef4444')
@@ -39,11 +40,12 @@ export function Sparkline({ points, width = 600, height = 160, stroke, fill = tr
     <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={className} aria-hidden>
       {fill && <path d={d.area} fill={color} opacity={0.12} />}
       <path d={d.line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      {d.entryY != null && <line x1={0} x2={width} y1={d.entryY} y2={d.entryY} stroke="#ffffff" strokeOpacity={0.55} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />}
     </svg>
   )
 }
 
-export function NavChart({ mint, symbol }: { mint: string; symbol: string }) {
+export function NavChart({ mint, symbol, entry }: { mint: string; symbol: string; entry?: number | null }) {
   const [range, setRange] = useState<Range>('7d')
   const q = useNavHistory(mint, range)
   const points = q.data?.points ?? []
@@ -76,7 +78,7 @@ export function NavChart({ mint, symbol }: { mint: string; symbol: string }) {
       </div>
       <div className="mt-3 h-40 w-full">
         {enough ? (
-          <Sparkline points={points} className="h-full w-full" />
+          <Sparkline points={points} className="h-full w-full" entry={entry ?? null} />
         ) : (
           <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-pot-border text-center text-xs text-white/60">
             {q.isLoading ? 'Loading…' : q.isError ? 'History is not available right now.' : 'Tracking started. The line appears after a few snapshots (one every 15 minutes).'}
@@ -85,7 +87,7 @@ export function NavChart({ mint, symbol }: { mint: string; symbol: string }) {
       </div>
       {enough && (
         <div className="mt-2 flex flex-wrap justify-between gap-x-4 text-[11px] text-white/60">
-          <span>{stats?.change24h != null ? `24h ${pct(stats.change24h)}` : ''}{stats?.change7d != null ? ` · 7d ${pct(stats.change7d)}` : ''}</span>
+          <span>{stats?.change24h != null ? `24h ${pct(stats.change24h)}` : ''}{stats?.change7d != null ? ` · 7d ${pct(stats.change7d)}` : ''}{entry != null ? ` · dashed line: your average entry $${entry.toFixed(4)}` : ''}</span>
           <span>{since ? `tracked since ${since.toLocaleDateString()} · ${stats?.points} points` : ''}</span>
         </div>
       )}

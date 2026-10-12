@@ -1,12 +1,12 @@
 <div align="center">
 
-# PotBot POTfolio
+# PotBot POTFolio
 
 ### Any basket of Solana assets. One liquid token.
 
 **Create a portfolio, hold the token.** Deposit USDC, receive a token that mirrors the whole basket, hold it anywhere a token works, redeem it any time for every asset inside or for USDC. Nobody can withdraw the assets: not the creator, not PotBot, not without a program upgrade or a malicious asset registration, both of which will sit behind a multisig.
 
-[potbot.fun](https://potbot.fun) · [Live POTfolios](https://potbot.fun/portfolios) · [How it works](https://potbot.fun/learn) · [For the judges](https://potbot.fun/worldsfair) · [@PotBot_sol](https://x.com/PotBot_sol)
+[potbot.fun](https://potbot.fun) · [Live POTFolios](https://potbot.fun/portfolios) · [How it works](https://potbot.fun/learn) · [For the judges](https://potbot.fun/worldsfair) · [@PotBot_sol](https://x.com/PotBot_sol)
 
 [![CI](https://github.com/YD811/potbot-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/YD811/potbot-v2/actions/workflows/ci.yml)
 [![Solana](https://img.shields.io/badge/Solana-devnet-9945FF?style=flat-square)](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)
@@ -24,7 +24,7 @@ Built for Colosseum **Crypto World's Fair** (Sept 14 to Oct 12, 2026). Third Pot
 ## 30 seconds
 
 ```text
-creator:  pick up to 5 assets + weights  ──►  one transaction  ──►  POTfolio token exists (Pot… mint, name, logo)
+creator:  pick up to 5 assets + weights  ──►  one transaction  ──►  POTFolio token exists (Pot… mint, name, logo)
 holder:   deposit USDC  ──►  Pyth prices posted in the same tx  ──►  tokens minted at NAV  ──►  basket bought in the same wallet prompt
 holder:   redeem any time  ──►  every asset in kind  or  USDC in one transaction (on-chain minimum, 0.10% conversion fee)
 nobody:   withdraw. There is no such instruction.
@@ -40,9 +40,9 @@ nobody:   withdraw. There is no such instruction.
 
 ## Live on devnet
 
-Program `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` ([Explorer](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)). Five showcase POTfolios with real Pyth prices and test tokens:
+Program `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` ([Explorer](https://explorer.solana.com/address/DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr?cluster=devnet)). Five showcase POTFolios with real Pyth prices and test tokens:
 
-| POTfolio | Basket | Mint |
+| POTFolio | Basket | Mint |
 |---|---|---|
 | Solana Blue Chips `$SBC` | SOL 50 / BTC 30 / ETH 20 | [`PotSvA4…`](https://potbot.fun/portfolios/PotSvA4ynuxbMFUA8SJSbULHhuTY1JcL5RaxnQz5FmM) |
 | Solana Native `$SOLN` | SOL 50 / JitoSOL 30 / PYTH 20 | [`Potgd4g…`](https://potbot.fun/portfolios/Potgd4gqWzJgiNZXxE5Avx3TB7fQyjd6gQMeqjL92vb) |
@@ -50,7 +50,7 @@ Program `DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr` ([Explorer](https://explo
 | Wall St on Solana `$WSTS` | TSLAx 40 / QQQx 40 / SOL 20 | [`Potsmds…`](https://potbot.fun/portfolios/PotsmdsvLcZGToyYs9XKcL9vVpGMbSV3UaFaA9EUZHH) |
 | Doge & Sol `$DGSL` | DOGE 60 / SOL 40 | [`Potsts7…`](https://potbot.fun/portfolios/Potsts7jB8dQPUN1MLU4TfqCPGkJTfwtrAVcHRBdp1q) |
 
-Try it: connect a devnet wallet (or sign in with email), click **Get test USDC** on any POTfolio (it also sends a little SOL for fees to an empty wallet), deposit, watch the basket get bought, redeem for the assets or for USDC. Every step shows up in the activity feed and on Explorer; the page keeps index price history and your cost basis and P&L.
+Try it: connect a devnet wallet (or sign in with email), click **Get test USDC** on any POTFolio (it also sends a little SOL for fees to an empty wallet), deposit, watch the basket get bought, redeem for the assets or for USDC. Every step shows up in the activity feed and on Explorer; the page keeps index price history and your cost basis and P&L.
 
 A clean "judge run" from a wallet that had nothing, through the same server routes the UI calls, is scripted in `apps/web/scripts/pot-index-route-flow.ts`:
 
@@ -67,7 +67,7 @@ npx tsx scripts/pot-index-route-flow.ts exit-usdc <mint> <shares>      # the res
 ## Repository map
 
 ```text
-packages/pot-index/        pot_index Anchor program (the POTfolio protocol) + LiteSVM tests      ← start here
+packages/pot-index/        pot_index Anchor program (the POTFolio protocol) + LiteSVM tests      ← start here
 apps/web/                  Next.js app: landing, /portfolios, /portfolios/new, /portfolios/[mint], /learn, /roadmap, /worldsfair, /mainnet
   src/lib/pot-index/       client builders, Pyth helpers, registry, garden levels
   src/app/api/pot-index/   Hermes proxy, faucet, devnet market maker (exit to USDC, allocate), NAV history, token metadata
@@ -120,11 +120,11 @@ Three reviews: Oct 8 and Oct 10 against the Solana Foundation program-security c
 
 ## What is next
 
-Fixed weights today. Next: exit to USDC through Jupiter on mainnet, Managed POTfolios (creator adjusts inside a public mandate with a timelock), Community POTfolios (holders vote with the token), 10 assets, a POTfolio/USDC pool on Meteora, Bot digest for holders. Roadmap: [potbot.fun/roadmap](https://potbot.fun/roadmap).
+Fixed weights today. Next: exit to USDC through Jupiter on mainnet, Managed POTFolios (creator adjusts inside a public mandate with a timelock), Community POTFolios (holders vote with the token), 10 assets, a POTFolio/USDC pool on Meteora, Bot digest for holders. Roadmap: [potbot.fun/roadmap](https://potbot.fun/roadmap).
 
 ## PotBot v2 (previous hackathon)
 
-Governed group vaults (`pot_vault`, devnet `GJap9DjUoKZ9dhXMqGCPTeTzY6kPyBJ51SXL1pi8AmiK`): members deposit, propose trades, vote, the program executes through Jupiter. MCP server `@potbot/mcp` exposes vaults to AI agents. Docs under [`docs/architecture`](docs/architecture). The vault UI is kept for reference while it is reworked; POTfolio is the live product.
+Governed group vaults (`pot_vault`, devnet `GJap9DjUoKZ9dhXMqGCPTeTzY6kPyBJ51SXL1pi8AmiK`): members deposit, propose trades, vote, the program executes through Jupiter. MCP server `@potbot/mcp` exposes vaults to AI agents. Docs under [`docs/architecture`](docs/architecture). The vault UI is kept for reference while it is reworked; POTFolio is the live product.
 
 ---
 

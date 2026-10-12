@@ -19,7 +19,7 @@ const STEPS: Step[] = [
     id: 0,
     emoji: '🪴',
     title: 'Welcome to PotBot',
-    body: 'A POTfolio is a basket of up to 5 Solana assets held as one token. Deposit USDC, receive the token, hold it in any wallet, redeem it any time.',
+    body: 'A POTFolio is a basket of up to 5 Solana assets held as one token. Deposit USDC, receive the token, hold it in any wallet, redeem it any time.',
     highlight: 'Nobody can withdraw the assets: not the creator, not PotBot. There is no such instruction.',
   },
   {
@@ -27,7 +27,7 @@ const STEPS: Step[] = [
     emoji: '🪴',
     title: 'Deposit, then redeem your way',
     body: 'Deposit USDC: the token is minted at NAV from Pyth prices in the same transaction and the basket is bought in the same wallet prompt. Redeem for every asset in kind, or for USDC in one transaction with an on-chain minimum.',
-    highlight: 'Devnet build: click Get test USDC on any POTfolio, then Deposit.',
+    highlight: 'Devnet build: click Get test USDC on any POTFolio, then Deposit.',
   },
   {
     id: 2,

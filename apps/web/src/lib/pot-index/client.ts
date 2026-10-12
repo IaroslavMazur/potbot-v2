@@ -215,7 +215,7 @@ export async function buildCreatePot(
   args: CreatePotArgs,
   opts: { indexMint?: Keypair; onGrind?: (tries: number) => void } = {},
 ): Promise<{ indexMint: Keypair; instructions: TransactionInstruction[] }> {
-  // Vanity mint: every POTfolio token address starts with "Pot".
+  // Vanity mint: every POTFolio token address starts with "Pot".
   const indexMint = opts.indexMint ?? (await grindKeypair(INDEX_MINT_PREFIX, { onProgress: opts.onGrind }))
   const pot = potPda(indexMint.publicKey)
   const sum = args.legs.reduce((s, l) => s + l.weightBps, 0)

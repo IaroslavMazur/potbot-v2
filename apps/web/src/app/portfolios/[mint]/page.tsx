@@ -71,7 +71,7 @@ export default function PotPage() {
   const [tab, setTab] = useState<'deposit' | 'exit'>('deposit')
   const [amount, setAmount] = useState('100')
   const [exitPct, setExitPct] = useState(100)
-  const [exitMode, setExitMode] = useState<'assets' | 'usdc'>('assets')
+  const [exitMode, setExitMode] = useState<'assets' | 'usdc'>('usdc')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string; sig?: string } | null>(null)
   const [copied, setCopied] = useState(false)

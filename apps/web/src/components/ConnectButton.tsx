@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -74,13 +76,14 @@ export function ConnectButton() {
                   {wallet.address ?? wallet.label}
                 </div>
               </div>
-              <a
-                href="/dashboard"
+              <Link
+                href="/portfolios"
                 role="menuitem"
+                onClick={() => setOpen(false)}
                 className="block px-3 py-2 text-sm rounded-lg hover:bg-pot-border/30 transition"
               >
                 {isLight ? 'My account' : 'My Dashboard'}
-              </a>
+              </Link>
               <button
                 type="button"
                 role="menuitem"

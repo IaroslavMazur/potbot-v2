@@ -120,11 +120,17 @@ export async function POST(req: Request) {
       new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
     // `pre` creates the holder's USDC account if needed (idempotent, tiny); it rides in the same
     // transaction unless that would not fit.
-    const hasUsdcAta = !!(await connection.getAccountInfo(userUsdc, 'confirmed'))
-    let exitTx = v0([...(hasUsdcAta ? [] : pre), open, ...sale, ...pay, close])
+    // `pre` creates, idempotently, the holder's USDC account, the treasury's USDC account and the
+    // holder's account for every leg (the legs pass through the holder before the sale). Keep only
+    // the ones that do not exist yet, so the exit is one transaction whenever it fits; otherwise the
+    // creations go first in their own transaction (both simulate cleanly).
+    const preTargets = pre.map((ix) => ix.keys[1].pubkey) // ATA create: [payer, ata, owner, mint, ...]
+    const preInfos = await connection.getMultipleAccountsInfo(preTargets, 'confirmed')
+    const preNeeded = pre.filter((_, i) => !preInfos[i])
+    let exitTx = v0([...preNeeded, open, ...sale, ...pay, close])
     const txs: VersionedTransaction[] = []
-    if (exitTx.serialize().length > 1232) {
-      txs.push(v0(pre))
+    if (preNeeded.length && exitTx.serialize().length > 1232) {
+      txs.push(v0(preNeeded))
       exitTx = v0([open, ...sale, ...pay, close])
     }
     txs.push(exitTx)

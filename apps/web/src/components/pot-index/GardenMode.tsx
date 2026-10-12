@@ -159,6 +159,7 @@ export function GardenMode({ series: fixed }: { series?: PlantSeries }) {
                     <span className="text-pot-green">L{s.level}</span> {s.name}
                   </div>
                   <div className="text-xs text-white/70">{s.level === 1 ? 'first deposit' : `from ${s.label}`}</div>
+                  <div className="text-center text-xs leading-snug text-white/90">{s.unlocks}</div>
                 </button>
               )
             })}

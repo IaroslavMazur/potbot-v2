@@ -14,7 +14,7 @@ export default function PotSnsUpsell({ variant = 'member', potPubkey, potName }:
   const title = isCreator ? 'Give this pot a name' : 'Claim your .potbot.sol'
   const body = isCreator
     ? (suggestedValid ? `Grab ${suggested}.potbot.sol — a clean, shareable handle for this pot.` : 'Grab a clean, shareable .potbot.sol handle for this pot.')
-    : 'One human-readable name across PotBot, Y-DAO & SOLO.'
+    : 'One human-readable name across PotBot and Y-DAO on Solana.'
   const cta = isCreator && suggestedValid ? `Claim ${suggested}.potbot.sol` : 'Browse names'
 
   return (

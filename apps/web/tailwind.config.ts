@@ -12,7 +12,7 @@ const config: Config = {
         'pot-border': '#1f2937',
         'pot-green': '#00ff88',
         'pot-accent': '#8b5cf6',
-        'pot-muted': '#6b7280',
+        'pot-muted': '#a3aec2',
         bg: '#0a0e17',
         surface: '#111827',
         border: '#1f2937',

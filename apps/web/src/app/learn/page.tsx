@@ -104,7 +104,8 @@ export default function LearnPage() {
       <Section title="Garden mode">
         <p>
           Every POTFolio is a plant. Its level is a function of the value held in the Pot, read from on-chain supply and price, so it
-          cannot be faked. Deposits water it, exits dry it out.
+          cannot be faked. Deposits water it, exits dry it out. Each level unlocks something for the POTFolio: more reach for the
+          creator, more trust for holders. Rolling out after the Fair.
         </p>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {STAGES.map((s) => (
@@ -112,6 +113,7 @@ export default function LearnPage() {
               <div className="text-xs font-bold text-pot-green">L{s.level}</div>
               <div className="text-sm font-semibold text-white">{s.name}</div>
               <div className="text-xs text-white/70">{s.level === 1 ? 'first deposit' : `from ${s.label}`}</div>
+              <div className="mt-1 text-xs text-white/90">{s.unlocks}</div>
             </div>
           ))}
         </div>

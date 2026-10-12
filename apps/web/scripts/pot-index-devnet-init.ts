@@ -137,7 +137,7 @@ async function main() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const a = await (program.account as any).assetConfig.fetchNullable(assetPda(jupMint))
     if (a?.enabled) {
-      await program.methods.updateAsset({ enabled: false, feedId: null }).accounts({ admin: admin.publicKey, config: configPda(), asset: assetPda(jupMint), priceUpdate: null }).rpc()
+      await program.methods.updateAsset({ enabled: false, feedId: null }).accounts({ admin: admin.publicKey, config: configPda(), asset: assetPda(jupMint), priceUpdate: null } as never).rpc()
       console.log('disabled asset JUP')
     }
     if (existing.flagship) {

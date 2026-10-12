@@ -48,7 +48,7 @@ Reading the feed live from `AssetConfig` would let one admin change reprice ever
 Exits pay every leg, so a single frozen leg vault would block every exit, and exit is the one path that must never fail. v1 therefore lists only assets nobody can freeze, which rules out regulated tokens (tokenized stocks, most fiat stablecoins). Those belong in a separate product whose exit pays the unfrozen legs and keeps a frozen leg's share claimable until it is unfrozen.
 
 **14. Legs are classic SPL tokens only.**
-Every leg CPI uses the classic token program, and vaults are checked against it. Token-2022 legs would need per-leg token programs and an allowlist of extensions (transfer hooks, permanent delegates, pausable mints and transfer fees all break the exit or valuation assumptions). Not planned for v1.
+Every leg CPI uses the classic token program, and vaults are checked against it. Token-2022 legs would need per-leg token programs and an allowlist of extensions (transfer hooks, permanent delegates, pausable mints and transfer fees all break the exit or valuation assumptions). Not planned for v1; see v2 recommendation 3.
 
 ## Exits and statistics
 
@@ -63,3 +63,19 @@ Holders choose how much leaves in kind and how much as USDC, and legs paid in ki
 
 **18. The 0.10% conversion fee is an interface fee (F13).**
 Any front end can call `exit` and swap the legs itself without it. Revenue projections count only the entry fee and the in-Pot exit fee.
+
+## Valuation
+
+**19. The virtual offset is one phantom token at $1.**
+`VIRTUAL_SHARES` and `VIRTUAL_ASSETS` (1 token, $1) stop the first-depositor attack: donating to the vault to round the next deposit down gives the donation away instead (test `a_donation_cannot_steal_from_the_next_depositor`). The cost is that the phantom is always priced at $1: while supply is small and a token is worth more than $1, a deposit can move up to `VIRTUAL_SHARES / (supply + VIRTUAL_SHARES)` of the Pot from existing holders to the depositor. In practice this only matters after a near-total exit leaves a few tokens behind, when the next depositor collects most of the fees those few tokens had accrued. The random-sequence test pins this bound.
+
+**20. Two checks are kept although no transaction can reach them today.**
+`RebalanceOpen` in `deposit`, `rebalance_open` and `exit_usdc_open` is reachable only through a CPI from another program, which the instructions-sysvar walk does not see. The `price - conf > 0` check in `snapshot_legs` sits behind the 2% confidence cap in `read_price`. Both stay as defence in depth; the tests document why they cannot be triggered directly.
+
+## Recommended for v2
+
+**1. Accept only Pyth's canonical push-feed account for each feed.** After lowering the live window to 30 s, this is the next oracle step. Pyth's push oracle keeps one account per feed at an address derived from the feed id and only accepts newer updates, so a caller can no longer post an older, more favourable price (F1), and "never use an older price than last time" holds for every Pot without a new field. It needs no layout change: `read_price` checks the account address as well. The operator then refreshes those accounts instead of its own. Verify the address derivation against Pyth's SDK before implementing.
+
+**2. Rotations as a Dutch auction, with an instruction allowlist.** A keeper returns only the minimum the program asks for (F6). In a Dutch auction the minimum starts at the full oracle value when a leg crosses the deadband and drops a little every slot, so keepers compete it down to the real cost of the swap instead of taking the whole band. `rebalance_open` also inspects the transaction and refuses instructions from programs outside a short list (compute budget, Pyth, token programs, the swap router), so a keeper cannot move a pool's price inside the same transaction. Executing the swap from the Pot itself (a CPI into Jupiter) was considered: it removes skimming of the output but not route manipulation, needs address lookup tables and deep CPI chains, and costs several times more to build and test.
+
+**3. Token-2022 legs, with an extension allowlist.** Each leg records its token program (a layout change); leg transfers go through `token_interface`; vault checks accept both token programs; `register_asset` refuses mints with transfer hooks, a permanent delegate, a pause authority, frozen-by-default accounts, non-transferability, confidential transfers or transfer fees, and either refuses or values correctly interest-bearing and scaled-amount mints. Roughly 300 to 500 lines of program and 400 of tests (one refusal per extension, a full flow with a Token-2022 leg, a mixed Pot). What it would enable is mostly metadata-only Token-2022 tokens; most regulated tokens use hooks or permanent delegates and would still be refused.

@@ -273,12 +273,14 @@ export function usePotIndexActions() {
   const sendLegacy = useCallback(
     async (ixs: Transaction['instructions'], extraSigners: { publicKey: PublicKey; secretKey: Uint8Array }[] = []) => {
       if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      // 'finalized' blockhash: wallets simulate against their own RPC, which may lag a 'confirmed'
-      // hash by a few slots and reject it with "Blockhash not found".
+      // 'finalized' blockhash everywhere the wallet signs: wallets simulate against their own RPC,
+      // which may lag a 'confirmed' hash by a few slots, spin on "Blockhash not found" and then the
+      // hash is expired by the time the holder confirms. Finalized costs ~13 s of validity and is
+      // known to every node.
       const attempt = async () => {
         const tx = new Transaction().add(...ixs)
         tx.feePayer = pubkey
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
         tx.recentBlockhash = blockhash
         if (extraSigners.length) tx.partialSign(...(extraSigners as never[]))
         const signed = await wallet.signTransaction(tx)
@@ -354,7 +356,7 @@ export function usePotIndexActions() {
           referrer,
           priceUpdates,
         })
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
         const depositTx = new VersionedTransaction(new TransactionMessage({ payerKey: pubkey, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
 
         // Deposit and allocate: buy the basket right after the deposit, in the same prompt. Best effort:
@@ -429,7 +431,7 @@ export function usePotIndexActions() {
         const last = attempt === 1
         const builtAt = Date.now()
         // The blockhash comes from the browser's own RPC: that is the node that will send the bundle.
-        const { blockhash, lastValidBlockHeight } = await withStage('exit-usdc:blockhash', connection.getLatestBlockhash('confirmed'))
+        const { blockhash, lastValidBlockHeight } = await withStage('exit-usdc:blockhash', connection.getLatestBlockhash('finalized'))
         const res = await withStage('exit-usdc:build', fetch('/api/pot-index/exit-usdc', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },

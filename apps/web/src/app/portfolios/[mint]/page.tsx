@@ -245,7 +245,7 @@ export default function PotPage() {
                 {connected && myUsdc.data !== undefined && amountNum > myUsdc.data && (
                   <p className="text-xs text-yellow-200">You have {myUsdc.data.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC in this wallet.{POT_INDEX_SETTINGS.cluster !== 'mainnet-beta' ? ' Get test USDC below.' : ''}</p>
                 )}
-                <p className="text-xs text-white/70">One wallet prompt: prices are posted, your tokens are minted at the current value, and the basket is bought in the same go. Min {MIN_DEPOSIT_USDC} USDC.</p>
+                <p className="text-xs text-white/70">One wallet prompt: prices are posted, your tokens are minted at the current value, and the basket is bought in the same go. Min {MIN_DEPOSIT_USDC} USDC. The wallet may warn that later transactions in the batch &quot;could fail&quot;: they only depend on the earlier ones. Confirm within a minute.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -309,6 +309,7 @@ export default function PotPage() {
                     <div className="flex justify-between"><span>Your share, sold at market</span><span>≈ ${(exitPreview.usdc + exitPreview.legs.reduce((a, l) => a + l.usd, 0)).toFixed(2)}</span></div>
                     <div className="flex justify-between"><span>Conversion fee 0.10% (on the sold part)</span><span>−${(exitPreview.legs.reduce((a, l) => a + l.usd, 0) * 0.001).toFixed(2)}</span></div>
                     <p className="mt-1">Sold in the same transaction. If the sale gives less than the on-chain minimum, nothing happens and you keep your tokens.{stalePrices ? ' Market closed: live prices needed, choose "Get the assets" meanwhile.' : ''}</p>
+                    <p className="mt-1">Your wallet signs a batch of {'~'}7 transactions at once (post prices, sell, pay, refund rent). It may warn that the later ones &quot;could fail&quot;: they only depend on the earlier ones in the batch. Confirm within a minute, the prices are live.</p>
                   </div>
                 )}
                 {!connected ? (

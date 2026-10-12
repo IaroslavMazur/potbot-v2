@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react'
-import { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js'
 import type { Wallet } from '@coral-xyz/anchor'
 import { usePrivyAnchorWallet } from '@/hooks/usePrivyAnchorWallet'
 import {
@@ -28,6 +28,15 @@ import { buildWithPythUpdates, fetchHermesPrices } from '@/lib/pot-index/pyth-po
 import { POT_INDEX_ASSETS, POT_INDEX_SETTINGS, assetByMint } from '@/lib/pot-index/registry'
 
 /** Signer-aware program + wallet (wallet-adapter or Privy). */
+/** A signed bundle is only good while its blockhash lives (~60 s) and, for anything that posts a
+ *  Pyth price, while the price is within the program's window (60 s). If the wallet prompt took
+ *  longer than that, send would fail with "blockhash not found" / PriceTooOld. Check before sending. */
+const BUNDLE_MAX_AGE_MS = 40_000
+async function bundleStillFresh(_connection: Connection, _first: VersionedTransaction, builtAt: number): Promise<boolean> {
+  return Date.now() - builtAt <= BUNDLE_MAX_AGE_MS
+}
+const TOOK_TOO_LONG = 'The wallet prompt took longer than a minute, so the prices in this bundle expired. Nothing changed. Confirm again, within a minute this time.'
+
 export function usePotIndexProgram() {
   const { connection } = useConnection()
   const adapter = useAnchorWallet()
@@ -257,7 +266,7 @@ export function usePotIndexActions() {
       const attempt = async () => {
         const tx = new Transaction().add(...ixs)
         tx.feePayer = pubkey
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
         tx.recentBlockhash = blockhash
         if (extraSigners.length) tx.partialSign(...(extraSigners as never[]))
         const signed = await wallet.signTransaction(tx)
@@ -317,7 +326,7 @@ export function usePotIndexActions() {
       )
       // One wallet prompt for the whole bundle (post prices → deposit → refund rent): fresh blockhash
       // on every tx right before signing, sign all at once, then send strictly in order.
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
       const vtxs = txs.map(({ tx }) => {
         const v = tx as VersionedTransaction
         v.message.recentBlockhash = blockhash
@@ -354,9 +363,11 @@ export function usePotIndexActions() {
       }
 
       const all = [...vtxs, ...allocTxs]
+      const builtAt = Date.now()
       const signed = wallet.signAllTransactions
         ? ((await wallet.signAllTransactions(all)) as VersionedTransaction[])
         : await Promise.all(all.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction))
+      if (!(await bundleStillFresh(connection, signed[0], builtAt))) throw new Error(TOOK_TOO_LONG)
       const sigs: string[] = []
       for (let i = 0; i < signed.length; i++) {
         const v = signed[i]
@@ -387,21 +398,30 @@ export function usePotIndexActions() {
   const exitUsdc = useCallback(
     async (pot: PotView, shares: number) => {
       if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      const res = await fetch('/api/pot-index/exit-usdc', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares) }),
-      })
-      const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string }
-      if (!res.ok || !data.txs) throw new Error(data.error ?? 'market maker unavailable')
-      const vtxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-      const signed = wallet.signAllTransactions
-        ? ((await wallet.signAllTransactions(vtxs)) as VersionedTransaction[])
-        : await Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction))
+      let signed: VersionedTransaction[] | null = null
+      // Two attempts: if the wallet prompt took too long, rebuild with fresh prices and ask again.
+      for (let attempt = 0; attempt < 2 && !signed; attempt++) {
+        const builtAt = Date.now()
+        const res = await fetch('/api/pot-index/exit-usdc', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares) }),
+        })
+        const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string }
+        if (!res.ok || !data.txs) throw new Error(data.error ?? 'market maker unavailable')
+        const vtxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
+        const s = wallet.signAllTransactions
+          ? ((await wallet.signAllTransactions(vtxs)) as VersionedTransaction[])
+          : await Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction))
+        if (await bundleStillFresh(connection, s[0], builtAt)) signed = s
+        else if (attempt === 1) throw new Error(TOOK_TOO_LONG)
+      }
+      if (!signed) throw new Error(TOOK_TOO_LONG)
       const sigs: string[] = []
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
       for (const v of signed) {
         const sig = await connection.sendRawTransaction(v.serialize(), { maxRetries: 5 })
-        await connection.confirmTransaction(sig, 'confirmed')
+        await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
         sigs.push(sig)
       }
       await invalidate()

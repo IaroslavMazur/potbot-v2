@@ -29,7 +29,7 @@ Judge run against the deployment (fresh keypair, nothing admin-signed): `pot-ind
 |---|---|---|---|
 | Oct 8 | v1.0 | 509477021 (last of several same-day upgrades) | 14 instructions, first security pass |
 | Oct 10 | v1.0.x | | exit to USDC, deposit-and-allocate, second review fixes |
-| Oct 12 | v1.1 | 510076099 | review F1/F5/F7/F14; `max_price_age_secs` set to 30; showcase metadata repointed to potbot.fun; sig `3f5ucfuXJSUwtWMR24La9XtAKznpCWvRZ9gMuGJhNonNJ6KUXPVfowhZQ72ShjDFKfX5k6u42ryerAeFTLX889kZ` |
+| Oct 12 | v1.1 | 510076099 | review F1/F5/F7/F14; `max_price_age_secs` set to 30, then 60 after a browser-wallet test (the holder has to sign a 7-tx bundle inside the window); showcase metadata repointed to potbot.fun; sig `3f5ucfuXJSUwtWMR24La9XtAKznpCWvRZ9gMuGJhNonNJ6KUXPVfowhZQ72ShjDFKfX5k6u42ryerAeFTLX889kZ` |
 
 Deployer balance and keys stay out of git. Mainnet: see `apps/web/src/app/mainnet` and `docs/operations/deploy.md`.
 

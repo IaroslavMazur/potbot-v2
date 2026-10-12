@@ -92,7 +92,7 @@ export async function POST(req: Request) {
 
     const program = new Program(idl as Idl, new AnchorProvider(connection, readOnlyWallet(wallet), { commitment: 'confirmed' }))
     const session = await buildPythSession(connection, readOnlyWallet(wallet), feedIds)
-    const { blockhash } = await connection.getLatestBlockhash('finalized')
+    const { blockhash } = await connection.getLatestBlockhash('confirmed')
     const userUsdc = getAssociatedTokenAddressSync(usdcMint, wallet)
     const mmUsdc = getAssociatedTokenAddressSync(usdcMint, mm.publicKey)
 

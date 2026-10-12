@@ -94,7 +94,7 @@ export async function POST(req: Request) {
       sale.push(createTransferCheckedInstruction(getAssociatedTokenAddressSync(l.mint, wallet), l.mint, mmAta, wallet, legOut[i], l.decimals))
     })
     const pay = payUsdc > 0n ? [createMintToInstruction(usdcMint, userUsdc, mm.publicKey, payUsdc)] : []
-    const { blockhash } = await connection.getLatestBlockhash('finalized')
+    const { blockhash } = await connection.getLatestBlockhash('confirmed')
     const v0 = (ixs: TransactionInstruction[]) =>
       new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
     const exitTx = v0([open, ...sale, ...pay, close])

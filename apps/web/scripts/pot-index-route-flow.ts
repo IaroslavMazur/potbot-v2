@@ -2,7 +2,7 @@
  * Drive the web app's server routes with a keypair wallet, exactly as the browser does:
  *
  *   npx tsx scripts/pot-index-route-flow.ts allocate  <mint> [--base <url>]
- *   npx tsx scripts/pot-index-route-flow.ts exit-usdc <mint> <shares> [--base <url>]
+ *   npx tsx scripts/pot-index-route-flow.ts exit-usdc <mint> <shares in base units, 6 decimals: 30 SBC = 30000000> [--base <url>]
  *   npx tsx scripts/pot-index-route-flow.ts faucet [--base <url>]
  *
  * Wallet: $POT_INDEX_WALLET_KEYPAIR (default ~/.config/solana/id.json).

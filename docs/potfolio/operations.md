@@ -20,8 +20,16 @@ Scripts need `NODE_OPTIONS=--require=./scripts/_no-jito.cjs` (stubs `jito-ts`) a
 3. `solana program deploy target/deploy/pot_index.so --program-id <keypair> --use-rpc` (QUIC/TPU may be blocked; `--use-rpc` is reliable). Same program id, existing Pots untouched unless account layouts change (then a migration is needed: flag it first).
 4. Copy `target/idl/pot_index.json` to `apps/web/src/lib/pot-index/idl.json`, update `client.ts` builders, run `npx tsc --noEmit`, deploy the web app.
 5. Verify on Explorer, run `pot-index:flow status`, one deposit, one exit.
-
 6. Admin config after an upgrade if needed: `npx tsx scripts/pot-index-set-config.ts show | price-age 30`. Metadata: `npm run pot-index:metadata update` repoints every showcase Pot's URI to `potbot.fun`.
+
+Judge run against the deployment (fresh keypair, nothing admin-signed): `pot-index-route-flow.ts faucet` → `pot-index:flow deposit 100 <mint>` → `route-flow allocate <mint>` → `pot-index:flow exit 20 <mint>` → `route-flow exit-usdc <mint> 30000000` (base units), then `status` and check the supply reconciles.
+
+## Deploy history (devnet)
+| Date | Version | Slot | What |
+|---|---|---|---|
+| Oct 8 | v1.0 | 509477021 (last of several same-day upgrades) | 14 instructions, first security pass |
+| Oct 10 | v1.0.x | | exit to USDC, deposit-and-allocate, second review fixes |
+| Oct 12 | v1.1 | 510076099 | review F1/F5/F7/F14; `max_price_age_secs` set to 30; showcase metadata repointed to potbot.fun; sig `3f5ucfuXJSUwtWMR24La9XtAKznpCWvRZ9gMuGJhNonNJ6KUXPVfowhZQ72ShjDFKfX5k6u42ryerAeFTLX889kZ` |
 
 Deployer balance and keys stay out of git. Mainnet: see `apps/web/src/app/mainnet` and `docs/operations/deploy.md`.
 

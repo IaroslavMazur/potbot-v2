@@ -191,6 +191,9 @@ pub fn handle_register_asset(ctx: Context<RegisterAsset>, feed_id: [u8; 32]) -> 
     // The cash currency can never be a leg: its vault would be the Pot's cash vault and NAV / exit
     // would count it twice. (Review F5.)
     require_keys_neq!(ctx.accounts.mint.key(), ctx.accounts.config.usdc_mint, PotError::InvalidLeg);
+    // A freeze on any leg vault would block every exit, since exits pay every leg (review F8). v1
+    // lists only assets nobody can freeze; freezable ones need a product whose exit can skip a leg.
+    require!(ctx.accounts.mint.freeze_authority.is_none(), PotError::FreezableMint);
     // The feed must have a live price now. A mistyped or unentitled feed id would otherwise surface
     // only at the first deposit, after a creator has finalized a Pot whose legs cannot change.
     // This proves the feed exists, not that it prices this mint (review F2).

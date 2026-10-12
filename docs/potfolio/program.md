@@ -31,7 +31,7 @@ Anchor 1.2.1, Solana CLI 4.3. Source: `packages/pot-index/programs/pot_index/src
 
 ## Limits (constants.rs)
 - Entry fee 30 bps: 40% referrer, 40% creator, 20% protocol. No referrer: referrer share goes to the creator.
-- Exit fee 50 bps, stays in the Pot.
+- Exit fee 50 bps, stays in the Pot; the last holder (burning the whole supply) pays none, since nobody is left for it to accrue to.
 - 2 to 5 legs. Index decimals 6. Minimum deposit 1 USDC.
 - Virtual shares/assets 1 token / $1 against first-depositor inflation.
 - Oracle: max confidence 2%, max age `max_price_age_secs` capped at 300 s, update account posted within 150 slots. Pot values what it holds or gives at `price + conf`, what it receives at `price - conf`.

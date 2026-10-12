@@ -144,8 +144,13 @@ pub fn shares_for_deposit(net_usd: u128, nav_before: u128, supply: u64) -> Resul
 }
 
 /// Pro-rata amount of one leg for `shares` out of `supply`, after the exit fee stays in the Pot.
+/// Burning the whole supply takes the whole balance: with nobody left to accrue to, a kept fee would
+/// be stranded and go to whoever deposits next.
 pub fn exit_amount(balance: u64, shares: u64, supply: u64) -> Result<u64> {
     require!(supply > 0, PotError::ZeroShares);
+    if shares == supply {
+        return Ok(balance);
+    }
     let gross = (balance as u128)
         .checked_mul(shares as u128)
         .ok_or(PotError::MathOverflow)?
@@ -182,5 +187,11 @@ mod tests {
     fn exit_fee_kept() {
         let out = exit_amount(1_000_000, 50, 100).unwrap(); // half the balance minus 0.5%
         assert_eq!(out, 497_500);
+    }
+
+    #[test]
+    fn last_holder_takes_everything() {
+        assert_eq!(exit_amount(1_000_001, 100, 100).unwrap(), 1_000_001);
+        assert_eq!(exit_amount(1_000_001, 99, 100).unwrap(), 985_050); // 99% minus 0.5%, floored
     }
 }

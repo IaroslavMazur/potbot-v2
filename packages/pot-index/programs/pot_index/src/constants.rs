@@ -22,7 +22,8 @@ pub const FEE_SHARE_REFERRER_BPS: u64 = 4_000; // 40%
 pub const FEE_SHARE_CREATOR_BPS: u64 = 4_000; // 40%
 pub const FEE_SHARE_PROTOCOL_BPS: u64 = 2_000; // 20%
 
-/// Exit fee kept inside the Pot on every burn: 0.50%.
+/// Exit fee kept inside the Pot on every burn: 0.50%. It accrues to the holders who stay, so the
+/// last holder (burning the whole supply) pays none: see `oracle::exit_amount`.
 pub const EXIT_FEE_BPS: u64 = 50;
 
 /// Maximum non-cash legs in a Pot.

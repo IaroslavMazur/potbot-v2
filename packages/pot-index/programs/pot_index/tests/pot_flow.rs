@@ -1024,9 +1024,11 @@ fn exit_pays_cash_without_leg_atas() {
     let usdc_before = token_amount(&w.svm, &ata(&user, &w.usdc));
     { let i = exit_ix(&w, &k, shares); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap();
     let usdc_after = token_amount(&w.svm, &ata(&user, &w.usdc));
-    // 100 deposited, 0.30% entry fee, 0.50% exit fee stays in the Pot.
-    assert_eq!(usdc_after - usdc_before, 99_700_000 * 9950 / 10_000);
+    // 100 deposited, 0.30% entry fee. The only holder burns the whole supply, so no exit fee is
+    // kept: there is nobody left for it to accrue to.
+    assert_eq!(usdc_after - usdc_before, 99_700_000);
     assert_eq!(token_amount(&w.svm, &ata(&user, &k.index_mint)), 0);
+    assert_eq!(token_amount(&w.svm, &k.cash_vault), 0, "nothing stranded in the Pot");
 }
 
 /// F10: account substitution. A vault of the right mint but not the Pot's is refused on deposit;
@@ -1319,4 +1321,30 @@ fn partially_verified_price_is_refused() {
 
     write_price(&mut w.svm, w.sol_price, SOL_FEED, SOL_PRICE, 10_000_000, NOW - 5);
     { let i = deposit_ix(&w, &k, 101_000_000, 0, false); send(&mut w.svm, &[i], &w.user, &[]) }.unwrap();
+}
+
+/// F8: a mint with a freeze authority cannot be listed, since a frozen leg vault would block
+/// every exit.
+#[test]
+fn freezable_mint_cannot_be_registered() {
+    let mut w = setup();
+    let mint = set_mint(&mut w.svm, 9);
+    let mut acc = w.svm.get_account(&mint).unwrap();
+    acc.data[46] = 1; // freeze_authority: COption::Some
+    acc.data[50..82].copy_from_slice(w.admin.pubkey().as_ref());
+    w.svm.set_account(mint, acc).unwrap();
+    let i = ix(
+        pot_index::instruction::RegisterAsset { feed_id: SOL_FEED },
+        pot_index::accounts::RegisterAsset {
+            admin: w.admin.pubkey(),
+            config: w.config,
+            mint,
+            price_update: w.sol_price,
+            asset: pda(&[ASSET_SEED, mint.as_ref()]),
+            system_program: SYSTEM,
+        },
+        vec![],
+    );
+    let err = send(&mut w.svm, &[i], &w.admin, &[]).unwrap_err();
+    assert!(err.contains("FreezableMint"), "{err}");
 }

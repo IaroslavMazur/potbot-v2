@@ -104,4 +104,6 @@ pub enum PotError {
     ConfigAlreadyMigrated,
     #[msg("Signer is not the program upgrade authority")]
     NotUpgradeAuthority, // 6050
+    #[msg("Mint has a freeze authority; v1 does not list freezable assets")]
+    FreezableMint,
 }

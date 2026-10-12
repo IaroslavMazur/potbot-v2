@@ -47,14 +47,14 @@ Deployer balance and keys stay out of git. Mainnet: see `apps/web/src/app/mainne
 - Verified build published on Explorer before the first deposit.
 - Upgrade authority, protocol admin and `register_asset` on a Squads 2-of-3 with a timelock (F2, F3) before the first deposit.
 - Publish the allowlist with mint ↔ Pyth feed pairs so anyone can verify registrations.
-- Only allowlist mints without a freeze authority, or document the exposure per asset (F8).
+- Mints with a freeze authority cannot be registered (F8, enforced in `register_asset`); freezable assets need a separate product (see security.md).
 - Token metadata JSON and images on the production domain or Arweave; Token-2022 metadata at the migration (F14).
 
 ## Upgrading a v1.1 deployment (Config migration)
 v1.2 appends `pending_admin_expiry_slot` to `Config` (154 → 162 bytes). The new program cannot load the old account, so the upgrade and the migration go back to back:
 
-1. `anchor build` (devnet: default features) and copy `target/idl/pot_index.json` to `apps/web/src/lib/pot-index/idl.json`.
-2. Upgrade the program (`anchor upgrade` or `solana program deploy --program-id …`).
+1. `anchor build` (devnet: default features). `apps/web/src/lib/pot-index/idl.json` in this release already matches the program; copy `target/idl/pot_index.json` over it again only if the program changes.
+2. The binary grew from ~501 KB to ~578 KB, past the 503,416 bytes the v1.1 program account holds: extend it first, `solana program extend DfKKe9oiPb8E98qxZ95otU3D5y1L1U3L2Eh3A7HQiUxr 80000` (~0.56 SOL of rent), unless your CLI extends automatically. Then upgrade (`anchor upgrade` or `solana program deploy --program-id …`).
 3. Immediately: `cd apps/web && npx tsx scripts/pot-index-set-config.ts migrate` with the admin keypair. `migrate_config` checks the account's owner, discriminator, old size and admin, tops up rent and grows the account in place; the old fields keep their offsets and the new one reads 0. Until it runs, every instruction that loads `Config` fails: deposits, rebalances, exit to USDC, admin. In-kind `exit` does not load `Config` and keeps working throughout.
 4. Check: `pot-index-set-config.ts show` prints the same admin, treasury and price age as before; `solana account <config PDA>` shows 162 bytes. A second `migrate` fails with `ConfigAlreadyMigrated`.
 5. An admin proposal made before the upgrade is void after it (its expiry reads 0): propose again.

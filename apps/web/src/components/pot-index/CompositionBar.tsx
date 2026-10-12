@@ -28,9 +28,8 @@ export function CompositionBar({ pot, actualUsd, cashUsd }: { pot: PotView; actu
             <li key={l.mint.toBase58()} className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: legColor(i) }} />
               <TokenHover symbol={a?.symbol ?? ''}><span className="font-semibold text-white">{a?.symbol ?? l.mint.toBase58().slice(0, 4)}</span></TokenHover>
-              <span className="text-pot-muted">
+              <span className="text-pot-muted" title={actualPct !== null ? `Target ${l.weightBps / 100}% · now ${actualPct.toFixed(1)}%` : undefined}>
                 {l.weightBps / 100}%
-                {actualPct !== null && <span className="ml-1 text-xs">(now {actualPct.toFixed(1)}%)</span>}
               </span>
             </li>
           )
@@ -39,9 +38,7 @@ export function CompositionBar({ pot, actualUsd, cashUsd }: { pot: PotView; actu
           <li className="flex items-center gap-2">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-pot-muted" />
             <span className="font-semibold text-white">USDC</span>
-            <span className="text-pot-muted">
-              cash <span className="text-xs">({((cashUsd / total) * 100).toFixed(1)}%)</span>
-            </span>
+            <span className="text-pot-muted" title="USDC waiting to be bought into the basket">{((cashUsd / total) * 100).toFixed(1)}%</span>
           </li>
         )}
       </ul>

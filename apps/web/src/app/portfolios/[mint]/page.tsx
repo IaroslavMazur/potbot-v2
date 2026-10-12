@@ -201,15 +201,12 @@ export default function PotPage() {
           <div className="card p-5">
             <h2 className="mb-3 font-semibold text-white">Composition</h2>
             <CompositionBar pot={p} actualUsd={stats.data?.legsUsd} cashUsd={stats.data ? stats.data.cash / 1e6 : undefined} />
-            <p className="mt-3 text-xs text-white/70">
-              Target weights are fixed. Deposits land as USDC cash; anyone can rebalance it into the basket within on-chain limits
-              (max {p.maxTradeBps / 100}% of NAV per trade, {p.slippageBps / 100}% slippage band).
-            </p>
+            <p className="mt-3 text-xs text-white/50">Target weights. Hover a weight for the live one.</p>
           </div>
 
-          <div className="card p-5 text-sm text-white/70">
-            <h2 className="mb-2 font-semibold text-white">How this POTFolio works</h2>
-            <ul className="list-disc space-y-1 pl-5">
+          <details className="card p-5 text-sm text-white/70">
+            <summary className="cursor-pointer select-none font-semibold text-white">How this POTFolio works</summary>
+            <ul className="mt-3 list-disc space-y-1 pl-5">
               <li>Deposit USDC → the Pot mints ${p.symbol} at the current NAV per token. Entry fee {ENTRY_FEE_BPS / 100}%.</li>
               <li>Redeem ${p.symbol} → you receive your share of every asset inside, in kind. {EXIT_FEE_BPS / 100}% stays for remaining holders.</li>
               <li>The index token is a normal SPL token: hold it, send it, trade it.</li>
@@ -220,7 +217,7 @@ export default function PotPage() {
               <a className="text-pot-green hover:underline" href={explorerAddress(p.indexMint.toBase58())} target="_blank" rel="noreferrer">Index mint ↗</a>
               <a className="text-pot-green hover:underline" href={explorerAddress(POT_INDEX_SETTINGS.programId)} target="_blank" rel="noreferrer">Program ↗</a>
             </p>
-          </div>
+          </details>
 
           <ActivityFeed pot={p} />
         </section>

@@ -67,19 +67,19 @@ export function PositionCard({ pot, sharesBase, indexPrice, connected, change7d 
         const vsEntry = ((indexPrice - avgEntry) / avgEntry) * 100
         return (
           <details className="mt-3 text-xs">
-            <summary className="cursor-pointer select-none text-white/70">Entry vs now vs market</summary>
+            <summary className="cursor-pointer select-none text-white/70">Stats</summary>
             <div className="mt-2 grid grid-cols-3 gap-2 text-center">
               <div className="rounded-lg bg-pot-dark p-2"><div className="text-white/50">Your entry</div><div className="font-semibold text-white">{usd(avgEntry, 4)}</div></div>
               <div className="rounded-lg bg-pot-dark p-2"><div className="text-white/50">Now</div><div className="font-semibold text-white">{usd(indexPrice, 4)}</div></div>
               <div className="rounded-lg bg-pot-dark p-2"><div className="text-white/50">You vs entry</div><div className={`font-semibold ${tone(vsEntry)}`}>{sign(vsEntry)}{Math.abs(vsEntry).toFixed(2)}%</div></div>
             </div>
             {change7d != null && (
-              <p className="mt-2 text-white/60">The index moved <span className={tone(change7d)}>{sign(change7d)}{Math.abs(change7d).toFixed(2)}%</span> over the last 7 days for everyone; your line above depends on when you entered. Your average entry is the dashed line on the chart.</p>
+              <p className="mt-2 text-white/60">Index 7d: <span className={tone(change7d)}>{sign(change7d)}{Math.abs(change7d).toFixed(2)}%</span>. Your entry is the dashed line on the chart.</p>
             )}
           </details>
         )
       })()}
-      <p className="mt-2 text-[11px] text-white/50">Cost basis is computed from this wallet&apos;s own deposits and redemptions on-chain, entry fees included. Redemptions to assets reduce cost at average price.</p>
+      <p className="mt-2 text-[11px] text-white/40" title="Average cost from this wallet's own deposits and redemptions on-chain, entry fees included.">From your on-chain history.</p>
     </div>
   )
 }

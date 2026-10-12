@@ -51,7 +51,9 @@ Not changed on purpose: the monotonic-per-Pot publish time (needs a Pot field, v
 
 Oracle age cap + conservative confidence pricing (H1), rebalance deadband/cooldown and 1% max slippage (M1), two-step admin transfer and USDC-decimals check (M2), exit safety valve against a stale rebalance flag (L1), `init_if_needed` ATAs against pre-creation griefing (L2), 1 USDC minimum deposit (L5).
 
-## Test coverage (LiteSVM, `./test.sh`, 12 tests)
+## Test coverage (LiteSVM, `./test.sh`)
+
+`./test.sh` runs every test twice, with `--features mainnet` and with the default devnet build: 6 unit tests and 40 LiteSVM tests in three files. `tests/pot_flow.rs` holds the end-to-end flows below; `tests/guards.rs` asserts every reachable error (oracle owner, confidence, non-positive and long-posted prices, swapped price accounts, minimum deposit and fee split, deposit cap, holder minimums, pauses, Pot setup, deadband, cooldown, overshoot, open without close), the admin events and the pinned account layouts; `tests/invariants.rs` checks the first-depositor donation, pro-rata donations and exit fees, and 80 random deposit/exit/deploy steps with exact value conservation.
 
 Review tests (Oct 12): tick shopping bounded by price age and cap; USDC cannot be a leg; exit pays cash without leg ATAs; substituted vault and user ATA refused; creator and admin instructions gated. Full flow create → deposit (fee split) → bounded rebalance (missing close, oversized trade, under-delivery revert, honest fill, cooldown) → deposit at NAV → in-kind exit → pause. Overshoot bounds. Stale price blocks deposit but not exit. Weights must sum; admin-only config. Exit to USDC: missing close, close bound to another USDC account, under-delivery revert, honest fill with exact fee, holder floor enforced, double close, cross-window close. Cash deploys without cooldown, rotation cooldown untouched. Referral: exact 0.12/0.12/0.06 split, self-referral rejected, referrer = creator, no referrer, wrong-mint referrer account.
 

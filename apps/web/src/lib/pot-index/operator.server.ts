@@ -19,9 +19,7 @@ import crypto from 'node:crypto'
 import {
   Connection,
   Keypair,
-  NONCE_ACCOUNT_LENGTH,
   PublicKey,
-  SystemProgram,
   Transaction,
   TransactionMessage,
   VersionedTransaction,
@@ -168,40 +166,6 @@ export async function refreshPrices(connection: Connection, op: Keypair, feedIds
 }
 
 // ---------------------------------------------------------------------------------------------
-// Durable nonce per wallet
-// ---------------------------------------------------------------------------------------------
-
-async function nonceAddressAsync(op: Keypair, wallet: PublicKey) {
-  const seed = 'pn' + wallet.toBase58().slice(0, 30)
-  const address = await PublicKey.createWithSeed(op.publicKey, seed, SystemProgram.programId)
-  return { address, seed }
-}
-
-/** The wallet's nonce account (created by the operator on first use) and its current value. */
-export async function ensureNonce(connection: Connection, op: Keypair, wallet: PublicKey): Promise<{ address: PublicKey; value: string }> {
-  const { address, seed } = await nonceAddressAsync(op, wallet)
-  let info = await connection.getNonce(address, 'confirmed').catch(() => null)
-  if (!info) {
-    const lamports = await connection.getMinimumBalanceForRentExemption(NONCE_ACCOUNT_LENGTH)
-    await sendOperatorTx(connection, op, [
-      SystemProgram.createAccountWithSeed({
-        fromPubkey: op.publicKey,
-        basePubkey: op.publicKey,
-        seed,
-        newAccountPubkey: address,
-        lamports,
-        space: NONCE_ACCOUNT_LENGTH,
-        programId: SystemProgram.programId,
-      }),
-      SystemProgram.nonceInitialize({ noncePubkey: address, authorizedPubkey: op.publicKey }),
-    ])
-    info = await connection.getNonce(address, 'confirmed')
-  }
-  if (!info) throw new Error('nonce account unavailable')
-  return { address, value: info.nonce }
-}
-
-// ---------------------------------------------------------------------------------------------
 // Token accounts the holder's transaction needs
 // ---------------------------------------------------------------------------------------------
 
@@ -229,27 +193,22 @@ export async function hoistAtaCreations(connection: Connection, op: Keypair, ixs
 // The holder's transaction
 // ---------------------------------------------------------------------------------------------
 
-/** Compile [advance nonce, ...ixs] for `wallet` to sign. Never expires until the nonce advances. */
-/** Confirmation strategy for a holder transaction: its nonce account and the nonce value it was built on. */
-export async function nonceConfirm(connection: Connection, tx: VersionedTransaction): Promise<Confirm> {
-  const ix = tx.message.compiledInstructions[0]
-  const nonceAccountPubkey = tx.message.staticAccountKeys[ix.accountKeyIndexes[0]]
-  const minContextSlot = await connection.getSlot('confirmed')
-  return { nonceAccountPubkey, nonceValue: tx.message.recentBlockhash, minContextSlot }
-}
-
-export async function buildHolderTx(connection: Connection, op: Keypair, wallet: PublicKey, ixs: TransactionInstruction[]): Promise<VersionedTransaction> {
-  const nonce = await ensureNonce(connection, op, wallet)
-  const advance = SystemProgram.nonceAdvance({ noncePubkey: nonce.address, authorizedPubkey: op.publicKey })
-  return new VersionedTransaction(
-    new TransactionMessage({ payerKey: wallet, recentBlockhash: nonce.value, instructions: [advance, ...ixs] }).compileToV0Message(),
-  )
+/**
+ * The holder's transaction: a plain 'finalized' blockhash (known to every wallet RPC) and nothing
+ * a wallet flags. Durable nonces were tried first: Phantom marks them as high risk ("can be
+ * executed later") and appends its own guard instructions, so they are out. A clean single
+ * transaction simulates in a second, which leaves the holder the whole blockhash window to sign.
+ */
+export async function buildHolderTx(connection: Connection, _op: Keypair, wallet: PublicKey, ixs: TransactionInstruction[]) {
+  const bh = await connection.getLatestBlockhash('finalized')
+  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: bh.blockhash, instructions: ixs }).compileToV0Message())
+  return { tx, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight }
 }
 
 const TOKEN_TTL_MS = 15 * 60_000
 
 function tokenKey(op: Keypair): Buffer {
-  return crypto.createHash('sha256').update(Buffer.from(op.secretKey)).update('potbot-tx-token-v1').digest()
+  return crypto.createHash('sha256').update(Buffer.from(op.secretKey)).update('potbot-tx-token-v2').digest()
 }
 
 export interface TxTicket {
@@ -257,28 +216,67 @@ export interface TxTicket {
   wallet: string
   mint: string
   feedIds: string[]
+  /** sha256 of the instructions the operator built (see `instructionsHash`). */
+  ix: string
+  blockhash: string
+  lastValidBlockHeight: number
   exp: number
 }
 
-/** Token binding the exact message bytes and what the operator must do at submit time. */
-export function issueToken(op: Keypair, tx: VersionedTransaction, t: TxTicket): string {
+/** Programs a wallet may add around our instructions without changing what they do. */
+const WALLET_EXTRAS = new Set([
+  'ComputeBudget111111111111111111111111111111',
+  'L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95', // Lighthouse (Phantom transaction guard)
+])
+
+function canonical(ixs: { programId: PublicKey; keys: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[]; data: Uint8Array | Buffer }[]): Buffer {
+  const h = crypto.createHash('sha256')
+  for (const ix of ixs) {
+    h.update(ix.programId.toBytes())
+    for (const k of ix.keys) h.update(k.pubkey.toBytes()).update(Buffer.from([k.isSigner ? 1 : 0, k.isWritable ? 1 : 0]))
+    h.update(Buffer.from(ix.data))
+  }
+  return h.digest()
+}
+
+export function instructionsHash(ixs: TransactionInstruction[]): string {
+  return canonical(ixs).toString('base64url')
+}
+
+/** The transaction's instructions minus wallet extras, decompiled (v0, no lookup tables). */
+function holderInstructions(tx: VersionedTransaction) {
+  const keys = tx.message.staticAccountKeys
+  const m = tx.message
+  return m.compiledInstructions
+    .map((ci) => ({
+      programId: keys[ci.programIdIndex],
+      keys: ci.accountKeyIndexes.map((i) => ({ pubkey: keys[i], isSigner: m.isAccountSigner(i), isWritable: m.isAccountWritable(i) })),
+      data: ci.data,
+    }))
+    .filter((ix) => !WALLET_EXTRAS.has(ix.programId.toBase58()))
+}
+
+export function issueToken(op: Keypair, t: TxTicket): string {
   const body = Buffer.from(JSON.stringify(t)).toString('base64url')
-  const mac = crypto.createHmac('sha256', tokenKey(op)).update(Buffer.from(tx.message.serialize())).update(body).digest('base64url')
+  const mac = crypto.createHmac('sha256', tokenKey(op)).update(body).digest('base64url')
   return `${body}.${mac}`
 }
 
+/** The token is the operator's own; the transaction must carry exactly the instructions it built. */
 export function verifyToken(op: Keypair, tx: VersionedTransaction, token: string): TxTicket {
   const [body, mac] = token.split('.')
   if (!body || !mac) throw new Error('bad token')
-  const want = crypto.createHmac('sha256', tokenKey(op)).update(Buffer.from(tx.message.serialize())).update(body).digest('base64url')
-  if (want.length !== mac.length || !crypto.timingSafeEqual(Buffer.from(want), Buffer.from(mac))) throw new Error('transaction does not match what was built')
+  const want = crypto.createHmac('sha256', tokenKey(op)).update(body).digest('base64url')
+  if (want.length !== mac.length || !crypto.timingSafeEqual(Buffer.from(want), Buffer.from(mac))) throw new Error('bad token')
   const t = JSON.parse(Buffer.from(body, 'base64url').toString()) as TxTicket
   if (Date.now() > t.exp) throw new Error('this request expired, start again')
+  if (!tx.message.staticAccountKeys[0].equals(new PublicKey(t.wallet))) throw new Error('fee payer is not the holder')
+  if (canonical(holderInstructions(tx)).toString('base64url') !== t.ix) throw new Error('transaction does not match what was built')
   return t
 }
 
-export function newTicket(kind: string, wallet: PublicKey, mint: PublicKey, feedIds: string[]): TxTicket {
-  return { kind, wallet: wallet.toBase58(), mint: mint.toBase58(), feedIds, exp: Date.now() + TOKEN_TTL_MS }
+export function newTicket(kind: string, wallet: PublicKey, mint: PublicKey, feedIds: string[], ixs: TransactionInstruction[], bh: { blockhash: string; lastValidBlockHeight: number }): TxTicket {
+  return { kind, wallet: wallet.toBase58(), mint: mint.toBase58(), feedIds, ix: instructionsHash(ixs), blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight, exp: Date.now() + TOKEN_TTL_MS }
 }
 
 // ---------------------------------------------------------------------------------------------

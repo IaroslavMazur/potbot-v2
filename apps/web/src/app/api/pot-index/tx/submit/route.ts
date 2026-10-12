@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { PublicKey, VersionedTransaction } from '@solana/web3.js'
 import { fetchPot } from '@/lib/pot-index/client'
-import { allocateAsKeeper, assertDevnet, nonceConfirm, operatorConnection, operatorKeypair, refreshPrices, sendAndConfirm, verifyToken } from '@/lib/pot-index/operator.server'
+import { allocateAsKeeper, assertDevnet, operatorConnection, operatorKeypair, refreshPrices, sendAndConfirm, verifyToken } from '@/lib/pot-index/operator.server'
 
 /**
  * POST /api/pot-index/tx/submit  { tx: base64 (signed by the holder), token }
@@ -26,9 +26,11 @@ export async function POST(req: Request) {
     if (hi < 0 || tx.signatures[hi].every((x) => x === 0)) return NextResponse.json({ error: 'not signed by the holder' }, { status: 400 })
     const connection = operatorConnection()
     if (t.feedIds.length) await refreshPrices(connection, op, t.feedIds)
-    const how = await nonceConfirm(connection, tx)
-    tx.sign([op])
-    const sig = await sendAndConfirm(connection, tx, how)
+    // Expired before it reached us? Say so plainly instead of a failed send.
+    if ((await connection.getBlockHeight('confirmed')) > t.lastValidBlockHeight) return NextResponse.json({ error: 'That signature took longer than the network allows (about a minute). Nothing changed. Confirm again.' }, { status: 409 })
+    const opIndex = keys.findIndex((k) => k.equals(op.publicKey))
+    if (opIndex >= 0 && tx.message.isAccountSigner(opIndex)) tx.sign([op])
+    const sig = await sendAndConfirm(connection, tx, { blockhash: t.blockhash, lastValidBlockHeight: t.lastValidBlockHeight })
     let allocated: string[] = []
     if (t.kind === 'deposit') {
       try {

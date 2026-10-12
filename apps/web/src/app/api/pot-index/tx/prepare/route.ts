@@ -82,8 +82,8 @@ export async function POST(req: Request) {
     } else return NextResponse.json({ error: 'kind' }, { status: 400 })
 
     const rest = await hoistAtaCreations(connection, op, ixs)
-    const tx = await buildHolderTx(connection, op, wallet, rest)
-    const token = issueToken(op, tx, newTicket(kind, wallet, mint, needsPrices ? feedIds : []))
+    const { tx, blockhash, lastValidBlockHeight } = await buildHolderTx(connection, op, wallet, rest)
+    const token = issueToken(op, newTicket(kind, wallet, mint, needsPrices ? feedIds : [], rest, { blockhash, lastValidBlockHeight }))
     return NextResponse.json({ ok: true, tx: Buffer.from(tx.serialize()).toString('base64'), token, ...summary })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })

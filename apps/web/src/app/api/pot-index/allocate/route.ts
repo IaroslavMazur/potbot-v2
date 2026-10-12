@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getRpcUrl } from '@/lib/rpc'
 import { AnchorProvider, Program, type Idl, type Wallet } from '@coral-xyz/anchor'
 import { Connection, Keypair, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, createTransferCheckedInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
@@ -38,9 +39,11 @@ export async function POST(req: Request) {
   let wallet: PublicKey
   let mint: PublicKey
   let depositNet = 0
+  let clientBlockhash: string | null = null
   try {
-    const body = (await req.json()) as { wallet?: string; mint?: string; depositNetUsdc?: string | number }
+    const body = (await req.json()) as { wallet?: string; mint?: string; depositNetUsdc?: string | number; blockhash?: string }
     wallet = new PublicKey(body.wallet ?? '')
+    clientBlockhash = typeof body.blockhash === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(body.blockhash) ? body.blockhash : null
     mint = new PublicKey(body.mint ?? '')
     depositNet = Math.max(0, Number(body.depositNetUsdc ?? 0))
   } catch {
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
 
   try {
     const mm = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secret)))
-    const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL ?? 'https://api.devnet.solana.com', 'confirmed')
+    const connection = new Connection(getRpcUrl(), 'confirmed')
     const usdcMint = new PublicKey(registry.usdcMint)
     const pot = await fetchPot(connection, mint)
     if (!pot) return NextResponse.json({ error: 'pot not found' }, { status: 404 })
@@ -92,7 +95,8 @@ export async function POST(req: Request) {
 
     const program = new Program(idl as Idl, new AnchorProvider(connection, readOnlyWallet(wallet), { commitment: 'confirmed' }))
     const session = await buildPythSession(connection, readOnlyWallet(wallet), feedIds)
-    const { blockhash } = await connection.getLatestBlockhash('confirmed')
+    // Blockhash from the holder's own RPC when provided (see exit-usdc route), else ours.
+    const blockhash = clientBlockhash ?? (await connection.getLatestBlockhash('confirmed')).blockhash
     const userUsdc = getAssociatedTokenAddressSync(usdcMint, wallet)
     const mmUsdc = getAssociatedTokenAddressSync(usdcMint, mm.publicKey)
 
@@ -125,6 +129,7 @@ export async function POST(req: Request) {
 
     const ser = (v: VersionedTransaction) => Buffer.from(v.serialize()).toString('base64')
     const sign = ({ tx, signers }: { tx: VersionedTransaction; signers: { publicKey: PublicKey; secretKey: Uint8Array }[] }) => {
+      tx.message.recentBlockhash = blockhash // same blockhash as the middle txs, set before signing
       if (signers.length) tx.sign(signers as never[])
       return tx
     }

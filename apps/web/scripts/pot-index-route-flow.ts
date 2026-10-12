@@ -43,7 +43,8 @@ async function main() {
 
   const mint = pos[1]
   if (!mint) throw new Error('mint required')
-  const body = cmd === 'allocate' ? { wallet, mint } : cmd === 'exit-usdc' ? { wallet, mint, shares: pos[2] } : null
+  const { blockhash } = await connection.getLatestBlockhash('confirmed') // like the browser: the sender's own blockhash
+  const body = cmd === 'allocate' ? { wallet, mint, blockhash } : cmd === 'exit-usdc' ? { wallet, mint, shares: pos[2], blockhash } : null
   if (!body) throw new Error('unknown command')
   const res = await post(cmd, body)
   const txs = (res.txs as string[]).map((b) => VersionedTransaction.deserialize(Buffer.from(b, 'base64')))

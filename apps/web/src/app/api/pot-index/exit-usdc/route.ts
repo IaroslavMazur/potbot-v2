@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getRpcUrl } from '@/lib/rpc'
 import { AnchorProvider, Program, type Idl, type Wallet } from '@coral-xyz/anchor'
 import { Connection, Keypair, PublicKey, TransactionMessage, VersionedTransaction, type TransactionInstruction } from '@solana/web3.js'
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, createTransferCheckedInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
@@ -35,9 +36,11 @@ export async function POST(req: Request) {
   let wallet: PublicKey
   let mint: PublicKey
   let shares: bigint
+  let clientBlockhash: string | null = null
   try {
-    const body = (await req.json()) as { wallet?: string; mint?: string; shares?: string | number }
+    const body = (await req.json()) as { wallet?: string; mint?: string; shares?: string | number; blockhash?: string }
     wallet = new PublicKey(body.wallet ?? '')
+    clientBlockhash = typeof body.blockhash === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(body.blockhash) ? body.blockhash : null
     mint = new PublicKey(body.mint ?? '')
     shares = BigInt(body.shares ?? 0)
     if (shares <= 0n) throw new Error('shares')
@@ -47,7 +50,7 @@ export async function POST(req: Request) {
 
   try {
     const mm = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secret)))
-    const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL ?? 'https://api.devnet.solana.com', 'confirmed')
+    const connection = new Connection(getRpcUrl(), 'confirmed')
     const usdcMint = new PublicKey(registry.usdcMint)
     const treasury = new PublicKey(registry.treasury)
     const pot = await fetchPot(connection, mint)
@@ -94,7 +97,10 @@ export async function POST(req: Request) {
       sale.push(createTransferCheckedInstruction(getAssociatedTokenAddressSync(l.mint, wallet), l.mint, mmAta, wallet, legOut[i], l.decimals))
     })
     const pay = payUsdc > 0n ? [createMintToInstruction(usdcMint, userUsdc, mm.publicKey, payUsdc)] : []
-    const { blockhash } = await connection.getLatestBlockhash('confirmed')
+    // The holder's browser sends the blockhash its own RPC just returned, so the node that will
+    // send the bundle is guaranteed to know it (a blockhash from a lagging server-side RPC showed
+    // up as "Blockhash not found" in the wallet). Fallback: our RPC.
+    const blockhash = clientBlockhash ?? (await connection.getLatestBlockhash('confirmed')).blockhash
     const v0 = (ixs: TransactionInstruction[]) =>
       new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message())
     const exitTx = v0([open, ...sale, ...pay, close])
@@ -108,6 +114,7 @@ export async function POST(req: Request) {
     // Partially sign with the market maker where it is a required signer; the holder signs the rest.
     const out = txs.map(({ tx, signers }) => {
       const v = tx as VersionedTransaction
+      v.message.recentBlockhash = blockhash // one blockhash for the whole bundle, set before anyone signs
       if (signers.length) v.sign(signers as never[])
       const needsMm = v.message.staticAccountKeys.some((k, i) => k.equals(mm.publicKey) && v.message.isAccountSigner(i))
       if (needsMm) v.sign([mm])

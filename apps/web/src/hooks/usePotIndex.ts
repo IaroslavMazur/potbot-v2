@@ -357,6 +357,7 @@ export function usePotIndexActions() {
               wallet: pubkey.toBase58(),
               mint: pot.indexMint.toBase58(),
               depositNetUsdc: Math.floor(amountUsdc * 1e6 * (1 - ENTRY_FEE_BPS / 10_000)),
+              blockhash,
             }),
           })
           const data = (await res.json()) as { txs?: string[]; plan?: unknown[] }
@@ -405,32 +406,46 @@ export function usePotIndexActions() {
   const exitUsdc = useCallback(
     async (pot: PotView, shares: number) => {
       if (!wallet || !pubkey) throw new Error('Connect a wallet first')
-      let signed: VersionedTransaction[] | null = null
-      // Two attempts: if the wallet prompt took too long, rebuild with fresh prices and ask again.
-      for (let attempt = 0; attempt < 2 && !signed; attempt++) {
+      const sigs: string[] = []
+      // Two attempts: rebuild with fresh prices and a fresh blockhash if the wallet prompt took too
+      // long or the sending RPC does not know the bundle's blockhash.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const last = attempt === 1
         const builtAt = Date.now()
+        // The blockhash comes from the browser's own RPC: that is the node that will send the bundle.
+        const { blockhash, lastValidBlockHeight } = await withStage('exit-usdc:blockhash', connection.getLatestBlockhash('confirmed'))
         const res = await withStage('exit-usdc:build', fetch('/api/pot-index/exit-usdc', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares) }),
+          body: JSON.stringify({ wallet: pubkey.toBase58(), mint: pot.indexMint.toBase58(), shares: String(shares), blockhash }),
         }))
         const data = (await res.json()) as { ok?: boolean; txs?: string[]; error?: string }
         if (!res.ok || !data.txs) throw new Error(data.error ?? 'market maker unavailable')
         const vtxs = data.txs.map((b64) => VersionedTransaction.deserialize(Buffer.from(b64, 'base64')))
-        const s = await withStage(`exit-usdc:sign(${vtxs.length} txs, attempt ${attempt + 1})`, wallet.signAllTransactions
+        const signed = await withStage(`exit-usdc:sign(${vtxs.length} txs, attempt ${attempt + 1})`, wallet.signAllTransactions
           ? (wallet.signAllTransactions(vtxs) as Promise<VersionedTransaction[]>)
           : Promise.all(vtxs.map(async (v) => (await wallet.signTransaction(v)) as VersionedTransaction)))
-        if (await bundleStillFresh(connection, s[0], builtAt)) signed = s
-        else if (attempt === 1) throw new Error(TOOK_TOO_LONG)
-      }
-      if (!signed) throw new Error(TOOK_TOO_LONG)
-      const sigs: string[] = []
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-      for (let i = 0; i < signed.length; i++) {
-        const v = signed[i]
-        const sig = await withStage(`exit-usdc:send ${i + 1}/${signed.length}`, connection.sendRawTransaction(v.serialize(), { maxRetries: 5 }))
-        await withStage(`exit-usdc:confirm ${i + 1}/${signed.length} ${sig}`, connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed'))
-        sigs.push(sig)
+        if (!(await bundleStillFresh(connection, signed[0], builtAt))) {
+          if (last) throw new Error(TOOK_TOO_LONG)
+          continue
+        }
+        let i = 0
+        try {
+          for (; i < signed.length; i++) {
+            const v = signed[i]
+            const sig = await withStage(`exit-usdc:send ${i + 1}/${signed.length}`, connection.sendRawTransaction(v.serialize(), { maxRetries: 5 }))
+            await withStage(`exit-usdc:confirm ${i + 1}/${signed.length} ${sig}`, connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed'))
+            sigs.push(sig)
+          }
+        } catch (e) {
+          // Nothing landed yet and the node rejected the blockhash: rebuild once. Anything after the
+          // first transaction has landed is reported as is (the Pot's state is consistent either way:
+          // posting prices is harmless and the exit itself is one atomic transaction).
+          const m = e instanceof Error ? e.message.toLowerCase() : ''
+          if (i === 0 && !last && m.includes('blockhash not found')) continue
+          throw e
+        }
+        break
       }
       await invalidate()
       return sigs

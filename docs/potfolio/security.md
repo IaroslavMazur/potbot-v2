@@ -21,6 +21,8 @@ Three passes. Oct 8 (initial program) and Oct 10 (after exit-to-USDC, deposit-an
 
 Operational note (Oct 12, after the live-wallet test): with a 60 s window a human wallet prompt is the bottleneck, so the operator posts Pyth prices into persistent price-update accounts and refreshes them right before it submits the holder's signed transaction: the price the program reads is seconds old however long the holder took to sign. The program's checks are unchanged (owner = receiver, full verification, feed id, age ≤ window, confidence). The operator co-signs only transactions whose instructions match what it built (HMAC token). Durable nonces were tried and dropped (wallets flag them).
 
+Open finding in the operator flow (Oct 12 review, not fixed): **the holder's transaction carries no minimum of its own.** `tx/prepare` builds deposits with `minSharesOut: 0` and exits to USDC with `minUsdcOut: 0`, and the operator chooses which Pyth update to post after the holder has signed. Within the program's bounds (any price inside `max_price_age_secs`, confidence ≤ 2%), the holder accepts whatever the operator posts: fewer index tokens on a deposit, less USDC on an exit to USDC. The Pot is protected by the program's own floors; the holder is protected only by trusting the operator. Fix, off-chain: set `minSharesOut` and `minUsdcOut` in `prepare` from the quote shown to the holder, minus a tolerance of about 1%, so a worse price fails the transaction instead of filling it.
+
 Not changed on purpose: the monotonic-per-Pot publish time (needs a Pot field, v2 migration), F6 items 1, 3, 4 (same migration), Token-2022 (mainnet).
 
 ## Oct 10 findings and what changed
